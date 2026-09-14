@@ -20,7 +20,7 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier,
             double value)
         {
-            // Temperature readings use double because they can have decimals.
+            // Temperature readings can contain decimal values.
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
@@ -33,7 +33,7 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier,
             bool value)
         {
-            // A switch only needs true or false.
+            // Switch readings only need true or false.
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
@@ -51,13 +51,12 @@ namespace SmartX.Api.Controllers
 
         [HttpPost("combine")]
         public ActionResult<TelemetryReading> CombineReadings(
-    TelemetryReading firstReading,
-    TelemetryReading secondReading)
+            CombineTelemetryRequest request)
         {
-            // Uses the overloaded + operator from TelemetryReading.
+            // Both readings arrive together in one request object.
             var combined = _telemetryService.CombineReadings(
-                firstReading,
-                secondReading);
+                request.FirstReading,
+                request.SecondReading);
 
             return Ok(combined);
         }
