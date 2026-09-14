@@ -8,9 +8,10 @@ namespace SmartX.Api.Services
 
         public FileUploadService(IWebHostEnvironment environment)
         {
-            _uploadFolder = Path.Combine(environment.ContentRootPath, "Uploads");
+            _uploadFolder = Path.Combine(
+                environment.ContentRootPath,
+                "Uploads");
 
-            // Makes sure the Uploads folder exists before we save files.
             if (!Directory.Exists(_uploadFolder))
             {
                 Directory.CreateDirectory(_uploadFolder);
@@ -19,15 +20,25 @@ namespace SmartX.Api.Services
 
         public async Task<SensorFile> SaveFileAsync(IFormFile file)
         {
-            var fileName = Path.GetFileName(file.FileName);
-            var filePath = Path.Combine(_uploadFolder, fileName);
+            var originalFileName = Path.GetFileName(file.FileName);
 
-            using var stream = new FileStream(filePath, FileMode.Create);
+            // Adds a unique value so files with the same name are not overwritten.
+            var uniqueFileName =
+                $"{Guid.NewGuid()}_{originalFileName}";
+
+            var filePath = Path.Combine(
+                _uploadFolder,
+                uniqueFileName);
+
+            using var stream = new FileStream(
+                filePath,
+                FileMode.Create);
+
             await file.CopyToAsync(stream);
 
             return new SensorFile
             {
-                FileName = fileName,
+                FileName = originalFileName,
                 FilePath = filePath,
                 UploadedAt = DateTime.UtcNow
             };
