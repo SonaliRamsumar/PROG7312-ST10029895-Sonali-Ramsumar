@@ -113,3 +113,24 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+body {
+    background-color: #f7f7fb;
+}
+
+h1, h2, h3, h4 {
+    font-weight: 600;
+}
+
+.card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.btn-primary {
+    border-radius: 8px;
+}
+
+.form-control {
+    border-radius: 8px;
+}
