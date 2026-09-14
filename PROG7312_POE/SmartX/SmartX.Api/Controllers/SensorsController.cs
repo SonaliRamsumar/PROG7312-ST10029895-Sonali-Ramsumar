@@ -9,10 +9,14 @@ namespace SmartX.Api.Controllers
     public class SensorsController : ControllerBase
     {
         private readonly SensorService _sensorService;
+        private readonly LocationValidationService _locationValidationService;
 
-        public SensorsController(SensorService sensorService)
+        public SensorsController(
+            SensorService sensorService,
+            LocationValidationService locationValidationService)
         {
             _sensorService = sensorService;
+            _locationValidationService = locationValidationService;
         }
 
         [HttpGet]
@@ -24,7 +28,14 @@ namespace SmartX.Api.Controllers
         [HttpPost]
         public ActionResult<SensorRegistration> AddSensor(SensorRegistration sensor)
         {
+            // Checks that the user entered one of our allowed locations.
+            if (!_locationValidationService.IsValidLocation(sensor.DeploymentLocation))
+            {
+                return BadRequest("Invalid deployment location.");
+            }
+
             var createdSensor = _sensorService.Add(sensor);
+
             return Ok(createdSensor);
         }
     }
