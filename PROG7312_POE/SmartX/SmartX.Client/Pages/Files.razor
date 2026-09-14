@@ -1,0 +1,67 @@
+﻿@page "/files"
+@using Microsoft.AspNetCore.Components.Forms
+@inject HttpClient Http
+
+<h3>Sensor File Upload</h3>
+
+<p>
+    Upload a configuration file, log file or deployment image for a sensor.
+</p>
+
+<InputFile OnChange="HandleFileSelected" />
+
+@if (selectedFile != null)
+{
+    <p class="mt-2">
+        Selected file: @selectedFile.Name
+    </p>
+
+    <button class="btn btn-primary" @onclick="UploadFile">
+        Upload File
+    </button>
+}
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <p class="mt-3">@message</p>
+}
+
+@code {
+    private IBrowserFile? selectedFile;
+    private string message = string.Empty;
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        message = string.Empty;
+    }
+
+    private async Task UploadFile()
+    {
+        if (selectedFile == null)
+        {
+            message = "Please select a file first.";
+            return;
+        }
+
+        using var content = new MultipartFormDataContent();
+
+        // Opens the selected browser file so it can be sent to the API.
+        using var fileContent = new StreamContent(
+            selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024));
+
+        content.Add(fileContent, "file", selectedFile.Name);
+
+        var response = await Http.PostAsync("api/Files/upload", content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            message = "File uploaded successfully.";
+            selectedFile = null;
+        }
+        else
+        {
+            message = "File upload failed.";
+        }
+    }
+}
