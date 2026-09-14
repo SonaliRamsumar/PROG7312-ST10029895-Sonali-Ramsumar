@@ -8,6 +8,7 @@ builder.Services.AddControllers();
 builder.Services.AddSingleton<SensorService>();
 builder.Services.AddSingleton<TelemetryService>();
 builder.Services.AddSingleton<LocationValidationService>();
+builder.Services.AddSingleton<FileUploadService>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
