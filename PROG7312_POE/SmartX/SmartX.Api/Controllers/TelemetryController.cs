@@ -9,10 +9,14 @@ namespace SmartX.Api.Controllers
     public class TelemetryController : ControllerBase
     {
         private readonly TelemetryService _telemetryService;
+        private readonly TelemetryHistoryService _historyService;
 
-        public TelemetryController(TelemetryService telemetryService)
+        public TelemetryController(
+            TelemetryService telemetryService,
+            TelemetryHistoryService historyService)
         {
             _telemetryService = telemetryService;
+            _historyService = historyService;
         }
 
         [HttpPost("temperature")]
@@ -20,7 +24,6 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier,
             double value)
         {
-            // Temperature readings can contain decimal values.
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
@@ -33,7 +36,6 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier,
             bool value)
         {
-            // Switch readings only need true or false.
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
@@ -53,12 +55,21 @@ namespace SmartX.Api.Controllers
         public ActionResult<TelemetryReading> CombineReadings(
             CombineTelemetryRequest request)
         {
-            // Both readings arrive together in one request object.
             var combined = _telemetryService.CombineReadings(
                 request.FirstReading,
                 request.SecondReading);
 
             return Ok(combined);
+        }
+
+        [HttpPost("history")]
+        public ActionResult<List<double>> ProcessHistory(double[][] batches)
+        {
+            // Converts jagged telemetry batches into one List for easier processing.
+            var readings = _historyService
+                .ConvertHistoricalBatchesToList(batches);
+
+            return Ok(readings);
         }
     }
 }

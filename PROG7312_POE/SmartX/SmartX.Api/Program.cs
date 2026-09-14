@@ -9,6 +9,7 @@ builder.Services.AddSingleton<SensorService>();
 builder.Services.AddSingleton<TelemetryService>();
 builder.Services.AddSingleton<LocationValidationService>();
 builder.Services.AddSingleton<FileUploadService>();
+builder.Services.AddSingleton<TelemetryHistoryService>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowClient", policy =>
@@ -19,6 +20,7 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
