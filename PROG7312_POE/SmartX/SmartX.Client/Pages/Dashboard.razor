@@ -1,0 +1,66 @@
+﻿@page "/dashboard"
+
+<h3>Smart-X Dashboard</h3>
+
+<p>
+    Monitor sensor activity and quickly identify devices that may need attention.
+</p>
+
+<div class="mb-3">
+    <label>Simulated Temperature Reading</label>
+
+    <input class="form-control"
+           type="number"
+           @bind="temperatureReading" />
+
+    <button class="btn btn-primary mt-2"
+            @onclick="CheckTemperature">
+        Check Reading
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(status))
+{
+    <div class="@GetAlertClass() mt-3">
+        <h4>@status</h4>
+        <p>@message</p>
+    </div>
+}
+
+@code {
+    private double temperatureReading;
+    private string status = string.Empty;
+    private string message = string.Empty;
+
+    private void CheckTemperature()
+    {
+        // These ranges are used to simulate basic IoT anomaly detection.
+        if (temperatureReading < 10 || temperatureReading > 40)
+        {
+            status = "CRITICAL";
+            message = "Temperature is outside the safe operating range.";
+        }
+        else if (temperatureReading < 15 || temperatureReading > 35)
+        {
+            status = "WARNING";
+            message = "Temperature is unusual and should be checked.";
+        }
+        else
+        {
+            status = "NORMAL";
+            message = "Temperature is within the expected range.";
+        }
+    }
+
+    private string GetAlertClass()
+    {
+        // Bootstrap changes the visual style based on the current status.
+        return status switch
+        {
+            "CRITICAL" => "alert alert-danger",
+            "WARNING" => "alert alert-warning",
+            "NORMAL" => "alert alert-success",
+            _ => "alert alert-secondary"
+        };
+    }
+}
