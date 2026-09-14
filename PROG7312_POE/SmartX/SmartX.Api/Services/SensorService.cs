@@ -11,10 +11,20 @@ namespace SmartX.Api.Services
             return _sensors;
         }
 
+        public bool DeviceExists(string deviceIdentifier)
+        {
+            // Checks whether this device identifier is already registered.
+            return _sensors.Any(sensor =>
+                sensor.DeviceIdentifier.Equals(
+                    deviceIdentifier,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
         public SensorRegistration Add(SensorRegistration sensor)
         {
             sensor.Id = _sensors.Count + 1;
             _sensors.Add(sensor);
+
             return sensor;
         }
     }
