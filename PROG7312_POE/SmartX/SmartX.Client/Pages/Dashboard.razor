@@ -7,6 +7,12 @@
 </p>
 
 <div class="mb-3">
+    <label>Sensor Name</label>
+    <input class="form-control"
+           @bind="sensorName" />
+</div>
+
+<div class="mb-3">
     <label>Simulated Temperature Reading</label>
 
     <input class="form-control"
@@ -23,18 +29,28 @@
 {
     <div class="@GetAlertClass() mt-3">
         <h4>@status</h4>
+
+        <p>
+            <strong>Sensor:</strong> @sensorName
+        </p>
+
+        <p>
+            <strong>Reading:</strong> @temperatureReading °C
+        </p>
+
         <p>@message</p>
     </div>
 }
 
 @code {
+    private string sensorName = "Temperature Sensor 1";
     private double temperatureReading;
     private string status = string.Empty;
     private string message = string.Empty;
 
     private void CheckTemperature()
     {
-        // These ranges are used to simulate basic IoT anomaly detection.
+        // Simple thresholds used to simulate anomaly detection.
         if (temperatureReading < 10 || temperatureReading > 40)
         {
             status = "CRITICAL";
@@ -54,7 +70,6 @@
 
     private string GetAlertClass()
     {
-        // Bootstrap changes the visual style based on the current status.
         return status switch
         {
             "CRITICAL" => "alert alert-danger",
