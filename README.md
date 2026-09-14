@@ -106,6 +106,9 @@ Example dashboard readings:
 - `37` = Warning
 - `45` = Critical
 
+##YouTube video of part 1
+
+https://youtu.be/3DCBFUvEJj4
 ## Author
 
 Sonali Ramsumar
