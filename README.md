@@ -1,1 +1,81 @@
-# PROG7312-ST10029895-Sonali-Ramsumar
+# Smart-X IoT Management System
+
+Smart-X is a .NET 10 IoT management system used to register sensors, monitor telemetry readings, upload sensor-related files and identify unusual sensor conditions.
+
+## Technologies Used
+
+- .NET 10
+- ASP.NET Core Web API
+- Blazor WebAssembly
+- C#
+- GitHub
+
+## Main Features
+
+- Register IoT sensors
+- View registered sensors
+- Monitor simulated telemetry readings
+- Display normal, warning and critical alert states
+- Upload sensor configuration files, logs and deployment images
+- Process telemetry using generics
+- Use operator overloading for telemetry readings
+- Use arrays, recursion and collections
+
+## Technical Concepts Demonstrated
+
+### Generic Telemetry Processing
+The project uses a generic `TelemetryPacket<T>` class so different sensor values, such as temperature values and switch states, can be handled using the same structure.
+
+### Operator Overloading
+The `TelemetryReading` class overloads the `+` operator so two telemetry readings can be combined using normal C# syntax.
+
+### Arrays and Recursion
+Allowed deployment locations are stored in an array and checked using a recursive validation method.
+
+### Collections
+Telemetry arrays can be converted into `List<double>` collections for easier processing.
+
+### IoT Alerts
+The dashboard uses simple temperature thresholds to display Normal, Warning and Critical states.
+
+### File Uploads
+Users can upload sensor-related files such as logs, configuration files and deployment images.
+
+## Project Structure
+
+- `SmartX.Api` - Backend Web API
+- `SmartX.Client` - Blazor WebAssembly frontend
+
+## How to Run the Project
+
+1. Open the SmartX solution in Visual Studio 2026.
+2. Make sure both `SmartX.Api` and `SmartX.Client` are set as startup projects.
+3. Run the solution.
+4. Open the Smart-X frontend in the browser.
+5. Use the navigation menu to access the Dashboard, Sensors and Files pages.
+
+## API
+
+The backend API runs locally using HTTPS.
+
+Example sensor endpoint:
+
+`/api/Sensors`
+
+## Example Sensor Data
+
+Example sensor registration:
+
+- Device Identifier: `TEMP-001`
+- Deployment Location: `Greenhouse 1`
+- Category: `Temperature`
+
+Example dashboard readings:
+
+- `25` = Normal
+- `37` = Warning
+- `45` = Critical
+
+## Author
+
+Sonali Ramsumar
