@@ -6,6 +6,11 @@
 <h3>Sensor Registration</h3>
 
 <div class="mb-3">
+    <label>Sensor Name</label>
+    <input class="form-control" @bind="newSensor.SensorName" />
+</div>
+
+<div class="mb-3">
     <label>Device Identifier</label>
     <input class="form-control" @bind="newSensor.DeviceIdentifier" />
 </div>
@@ -56,6 +61,7 @@ else
         <thead>
             <tr>
                 <th>ID</th>
+                <th>Sensor Name</th>
                 <th>Device</th>
                 <th>Location</th>
                 <th>Category</th>
@@ -66,6 +72,7 @@ else
             {
                 <tr>
                     <td>@sensor.Id</td>
+                    <td>@sensor.SensorName</td>
                     <td>@sensor.DeviceIdentifier</td>
                     <td>@sensor.DeploymentLocation</td>
                     <td>@sensor.Category</td>
@@ -96,10 +103,9 @@ else
         }
 
         message = "Sensor registered successfully.";
-
         sensors.Add(result);
 
-        // Clears the form after a successful registration.
+        // Clears the form after the sensor is added.
         newSensor = new SensorRegistration();
     }
 }
