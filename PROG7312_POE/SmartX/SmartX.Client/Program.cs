@@ -1,4 +1,5 @@
 
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using SmartX.Client;
@@ -22,5 +23,13 @@ builder.Services.AddScoped<CommandStreamApiService>();
 
 // Register Firebase authentication.
 builder.Services.AddScoped<FirebaseAuthService>();
+
+// Register Blazor authorization services.
+builder.Services.AddAuthorizationCore();
+
+builder.Services.AddScoped<FirebaseAuthenticationStateProvider>();
+
+builder.Services.AddScoped<AuthenticationStateProvider>(
+    sp => sp.GetRequiredService<FirebaseAuthenticationStateProvider>());
 
 await builder.Build().RunAsync();
