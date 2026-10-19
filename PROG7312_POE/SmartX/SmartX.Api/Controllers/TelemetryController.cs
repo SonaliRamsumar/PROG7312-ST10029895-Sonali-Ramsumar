@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿
+using Microsoft.AspNetCore.Mvc;
 using SmartX.Api.Models;
 using SmartX.Api.Services;
 
@@ -27,6 +28,9 @@ namespace SmartX.Api.Controllers
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
+
+            // Save each incoming temperature reading in the sorted history.
+            _historyService.AddReading(packet.Timestamp, packet.Value);
 
             return Ok(packet);
         }
@@ -65,11 +69,28 @@ namespace SmartX.Api.Controllers
         [HttpPost("history")]
         public ActionResult<List<double>> ProcessHistory(double[][] batches)
         {
-            // Converts jagged telemetry batches into one List for easier processing.
+            // Converts jagged telemetry batches into one List for processing.
             var readings = _historyService
                 .ConvertHistoricalBatchesToList(batches);
 
             return Ok(readings);
+        }
+
+        [HttpGet("history/readings")]
+        public IActionResult GetStoredReadings()
+        {
+            // The SortedDictionary returns readings from oldest to newest.
+            var readings = _historyService
+                .GetReadingsInChronologicalOrder();
+
+            // Return clear JSON properties instead of tuple fields.
+            var result = readings.Select(reading => new
+            {
+                Timestamp = reading.Timestamp,
+                Value = reading.Value
+            }).ToList();
+
+            return Ok(result);
         }
     }
 }
