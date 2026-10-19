@@ -15,6 +15,7 @@ builder.Services.AddSingleton<TelemetryService>();
 builder.Services.AddSingleton<LocationValidationService>();
 builder.Services.AddSingleton<FileUploadService>();
 builder.Services.AddSingleton<TelemetryHistoryService>();
+builder.Services.AddSingleton<LiveTelemetryService>();
 
 // Register the telemetry queue and alert priority queue.
 builder.Services.AddSingleton<TelemetryQueue<double>>();

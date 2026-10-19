@@ -13,17 +13,20 @@ namespace SmartX.Api.Controllers
         private readonly TelemetryHistoryService _historyService;
         private readonly TelemetryQueue<double> _temperatureQueue;
         private readonly AlertPriorityQueue _alertQueue;
+        private readonly LiveTelemetryService _liveTelemetryService;
 
         public TelemetryController(
             TelemetryService telemetryService,
             TelemetryHistoryService historyService,
             TelemetryQueue<double> temperatureQueue,
-            AlertPriorityQueue alertQueue)
+            AlertPriorityQueue alertQueue,
+            LiveTelemetryService liveTelemetryService)
         {
             _telemetryService = telemetryService;
             _historyService = historyService;
             _temperatureQueue = temperatureQueue;
             _alertQueue = alertQueue;
+            _liveTelemetryService = liveTelemetryService;
         }
 
         [HttpPost("temperature")]
@@ -31,13 +34,17 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier,
             double value)
         {
+            // Create a timestamped packet for the incoming reading.
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
 
-            // Save the reading in history and the normal FIFO queue.
+            // Record the reading in the existing history and FIFO queue.
             _historyService.AddReading(packet.Timestamp, packet.Value);
             _temperatureQueue.Enqueue(packet);
+
+            // Retain the device identifier for the live dashboard.
+            _liveTelemetryService.AddReading(packet);
 
             string severity = GetTemperatureSeverity(packet.Value);
 
@@ -59,6 +66,13 @@ namespace SmartX.Api.Controllers
             }
 
             return Ok(packet);
+        }
+
+        // Supplies recent packets, including their source device identifiers.
+        [HttpGet("live/readings")]
+        public IActionResult GetLiveReadings()
+        {
+            return Ok(_liveTelemetryService.GetRecentReadings());
         }
 
         [HttpPost("switch")]
@@ -95,7 +109,7 @@ namespace SmartX.Api.Controllers
         [HttpPost("history")]
         public ActionResult<List<double>> ProcessHistory(double[][] batches)
         {
-            // Converts historical batches into one list for processing.
+            // Convert historical batches into one list for processing.
             var readings = _historyService
                 .ConvertHistoricalBatchesToList(batches);
 
@@ -105,7 +119,7 @@ namespace SmartX.Api.Controllers
         [HttpGet("history/readings")]
         public IActionResult GetStoredReadings()
         {
-            // Returns numeric readings from oldest to newest.
+            // Return numeric readings from oldest to newest.
             var readings = _historyService
                 .GetReadingsInChronologicalOrder();
 
@@ -121,14 +135,14 @@ namespace SmartX.Api.Controllers
         [HttpGet("queue/pending")]
         public IActionResult GetPendingReadings()
         {
-            // Shows queued readings without removing them.
+            // Show queued readings without removing them.
             return Ok(_temperatureQueue.GetPendingPackets());
         }
 
         [HttpPost("queue/process-next")]
         public IActionResult ProcessNextReading()
         {
-            // Removes the oldest waiting reading first.
+            // Remove the oldest waiting reading first.
             if (!_temperatureQueue.TryDequeue(out var packet)
                 || packet == null)
             {
@@ -144,14 +158,14 @@ namespace SmartX.Api.Controllers
         [HttpGet("alerts/pending")]
         public IActionResult GetPendingAlerts()
         {
-            // Returns alerts with the most urgent ones first.
+            // Return alerts with the most urgent ones first.
             return Ok(_alertQueue.GetPendingAlertsInPriorityOrder());
         }
 
         [HttpPost("alerts/process-next")]
         public IActionResult ProcessNextAlert()
         {
-            // Removes the most urgent alert from the priority queue.
+            // Remove the most urgent alert from the priority queue.
             if (!_alertQueue.TryDequeueAlert(out var alert)
                 || alert == null)
             {
