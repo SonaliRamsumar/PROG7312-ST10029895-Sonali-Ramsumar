@@ -3,10 +3,12 @@ namespace SmartX.Api.Services
 {
     public class CommandStateService
     {
-        // Stores command values separately for each device.
+        // Store command values separately for each device.
+        // Device and command names are compared without case sensitivity.
         private readonly Dictionary<string, Dictionary<string, string>> _deviceStates =
             new(StringComparer.OrdinalIgnoreCase);
 
+        // Get the current value of a command for one device.
         public string? GetValue(string deviceIdentifier, string commandName)
         {
             if (_deviceStates.TryGetValue(deviceIdentifier, out var commands)
@@ -15,10 +17,10 @@ namespace SmartX.Api.Services
                 return value;
             }
 
-            // Null means this command has not been set yet.
             return null;
         }
 
+        // Store or update a command value for a device.
         public void SetValue(
             string deviceIdentifier,
             string commandName,
@@ -40,6 +42,17 @@ namespace SmartX.Api.Services
             }
 
             commands[commandName] = value;
+        }
+
+        // Return the current command states for all devices.
+        public Dictionary<string, Dictionary<string, string>> GetAllStates()
+        {
+            return _deviceStates.ToDictionary(
+                device => device.Key,
+                device => new Dictionary<string, string>(
+                    device.Value,
+                    StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
         }
     }
 }
