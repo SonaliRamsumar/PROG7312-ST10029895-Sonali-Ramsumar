@@ -1,15 +1,20 @@
+
 using SmartX.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
+
 builder.Services.AddSingleton<SensorService>();
 builder.Services.AddSingleton<TelemetryService>();
 builder.Services.AddSingleton<LocationValidationService>();
 builder.Services.AddSingleton<FileUploadService>();
 builder.Services.AddSingleton<TelemetryHistoryService>();
+
+// Shares the temperature queue across API requests.
+builder.Services.AddSingleton<TelemetryQueue<double>>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowClient", policy =>
@@ -24,6 +29,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
 app.UseCors("AllowClient");
 
 // Configure the HTTP request pipeline.
@@ -33,9 +39,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

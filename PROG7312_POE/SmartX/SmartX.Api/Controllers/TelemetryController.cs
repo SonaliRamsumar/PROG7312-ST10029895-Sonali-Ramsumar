@@ -11,13 +11,16 @@ namespace SmartX.Api.Controllers
     {
         private readonly TelemetryService _telemetryService;
         private readonly TelemetryHistoryService _historyService;
+        private readonly TelemetryQueue<double> _temperatureQueue;
 
         public TelemetryController(
             TelemetryService telemetryService,
-            TelemetryHistoryService historyService)
+            TelemetryHistoryService historyService,
+            TelemetryQueue<double> temperatureQueue)
         {
             _telemetryService = telemetryService;
             _historyService = historyService;
+            _temperatureQueue = temperatureQueue;
         }
 
         [HttpPost("temperature")]
@@ -29,8 +32,9 @@ namespace SmartX.Api.Controllers
                 deviceIdentifier,
                 value);
 
-            // Save each incoming temperature reading in the sorted history.
+            // Store the reading in history and queue it for processing.
             _historyService.AddReading(packet.Timestamp, packet.Value);
+            _temperatureQueue.Enqueue(packet);
 
             return Ok(packet);
         }
@@ -69,7 +73,7 @@ namespace SmartX.Api.Controllers
         [HttpPost("history")]
         public ActionResult<List<double>> ProcessHistory(double[][] batches)
         {
-            // Converts jagged telemetry batches into one List for processing.
+            // Converts historical batches into one list for processing.
             var readings = _historyService
                 .ConvertHistoricalBatchesToList(batches);
 
@@ -79,11 +83,10 @@ namespace SmartX.Api.Controllers
         [HttpGet("history/readings")]
         public IActionResult GetStoredReadings()
         {
-            // The SortedDictionary returns readings from oldest to newest.
+            // Returns numeric readings from oldest to newest.
             var readings = _historyService
                 .GetReadingsInChronologicalOrder();
 
-            // Return clear JSON properties instead of tuple fields.
             var result = readings.Select(reading => new
             {
                 Timestamp = reading.Timestamp,
@@ -91,6 +94,29 @@ namespace SmartX.Api.Controllers
             }).ToList();
 
             return Ok(result);
+        }
+
+        [HttpGet("queue/pending")]
+        public IActionResult GetPendingReadings()
+        {
+            // Shows queued readings without removing them.
+            return Ok(_temperatureQueue.GetPendingPackets());
+        }
+
+        [HttpPost("queue/process-next")]
+        public IActionResult ProcessNextReading()
+        {
+            // Removes the oldest waiting reading first.
+            if (!_temperatureQueue.TryDequeue(out var packet)
+                || packet == null)
+            {
+                return NotFound(new
+                {
+                    Message = "There are no pending temperature readings."
+                });
+            }
+
+            return Ok(packet);
         }
     }
 }
