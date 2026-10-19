@@ -19,6 +19,9 @@ builder.Services.AddSingleton<TelemetryQueue<double>>();
 // Register the priority queue for urgent telemetry alerts.
 builder.Services.AddSingleton<AlertPriorityQueue>();
 
+// Store manual commands so they can be undone.
+builder.Services.AddSingleton<CommandHistoryService>();
+
 // Allow the Blazor frontend to communicate with the API.
 builder.Services.AddCors(options =>
 {
