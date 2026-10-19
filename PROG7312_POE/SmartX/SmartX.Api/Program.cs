@@ -6,20 +6,24 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
+// Register the application services.
 builder.Services.AddSingleton<SensorService>();
 builder.Services.AddSingleton<TelemetryService>();
 builder.Services.AddSingleton<LocationValidationService>();
 builder.Services.AddSingleton<FileUploadService>();
 builder.Services.AddSingleton<TelemetryHistoryService>();
 
-// Shares the temperature queue across API requests.
+// Register the telemetry queue for FIFO processing.
 builder.Services.AddSingleton<TelemetryQueue<double>>();
 
+// Register the priority queue for urgent telemetry alerts.
+builder.Services.AddSingleton<AlertPriorityQueue>();
+
+// Allow the Blazor frontend to communicate with the API.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowClient", policy =>
     {
-        // Allows our Blazor frontend to call this API while developing.
         policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .AllowAnyMethod();
@@ -39,7 +43,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();

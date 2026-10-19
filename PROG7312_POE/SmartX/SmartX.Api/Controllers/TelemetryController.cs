@@ -12,15 +12,18 @@ namespace SmartX.Api.Controllers
         private readonly TelemetryService _telemetryService;
         private readonly TelemetryHistoryService _historyService;
         private readonly TelemetryQueue<double> _temperatureQueue;
+        private readonly AlertPriorityQueue _alertQueue;
 
         public TelemetryController(
             TelemetryService telemetryService,
             TelemetryHistoryService historyService,
-            TelemetryQueue<double> temperatureQueue)
+            TelemetryQueue<double> temperatureQueue,
+            AlertPriorityQueue alertQueue)
         {
             _telemetryService = telemetryService;
             _historyService = historyService;
             _temperatureQueue = temperatureQueue;
+            _alertQueue = alertQueue;
         }
 
         [HttpPost("temperature")]
@@ -32,9 +35,28 @@ namespace SmartX.Api.Controllers
                 deviceIdentifier,
                 value);
 
-            // Store the reading in history and queue it for processing.
+            // Save the reading in history and the normal FIFO queue.
             _historyService.AddReading(packet.Timestamp, packet.Value);
             _temperatureQueue.Enqueue(packet);
+
+            string severity = GetTemperatureSeverity(packet.Value);
+
+            // Only warning and critical readings create alerts.
+            if (severity != "Normal")
+            {
+                var alert = new TelemetryAlert
+                {
+                    DeviceIdentifier = packet.DeviceIdentifier,
+                    Value = packet.Value,
+                    Severity = severity,
+                    Timestamp = packet.Timestamp,
+                    Message = severity == "Critical"
+                        ? $"Critical temperature: {packet.Value} degrees"
+                        : $"Temperature warning: {packet.Value} degrees"
+                };
+
+                _alertQueue.EnqueueAlert(alert);
+            }
 
             return Ok(packet);
         }
@@ -117,6 +139,44 @@ namespace SmartX.Api.Controllers
             }
 
             return Ok(packet);
+        }
+
+        [HttpGet("alerts/pending")]
+        public IActionResult GetPendingAlerts()
+        {
+            // Returns alerts with the most urgent ones first.
+            return Ok(_alertQueue.GetPendingAlertsInPriorityOrder());
+        }
+
+        [HttpPost("alerts/process-next")]
+        public IActionResult ProcessNextAlert()
+        {
+            // Removes the most urgent alert from the priority queue.
+            if (!_alertQueue.TryDequeueAlert(out var alert)
+                || alert == null)
+            {
+                return NotFound(new
+                {
+                    Message = "There are no pending alerts."
+                });
+            }
+
+            return Ok(alert);
+        }
+
+        private static string GetTemperatureSeverity(double value)
+        {
+            if (value < 10 || value > 40)
+            {
+                return "Critical";
+            }
+
+            if (value < 15 || value > 35)
+            {
+                return "Warning";
+            }
+
+            return "Normal";
         }
     }
 }
