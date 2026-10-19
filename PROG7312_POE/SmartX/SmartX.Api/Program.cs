@@ -22,6 +22,9 @@ builder.Services.AddSingleton<AlertPriorityQueue>();
 // Store manual commands so they can be undone.
 builder.Services.AddSingleton<CommandHistoryService>();
 
+// Store the current command state of each device.
+builder.Services.AddSingleton<CommandStateService>();
+
 // Allow the Blazor frontend to communicate with the API.
 builder.Services.AddCors(options =>
 {
