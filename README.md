@@ -1,114 +1,167 @@
 # Smart-X IoT Management System
 
-Smart-X is a .NET 10 IoT management system used to register sensors, monitor telemetry readings, upload sensor-related files and identify unusual sensor conditions.
+Smart-X is a .NET 10 IoT Management System developed to register IoT sensors, monitor telemetry readings, process device commands, manage sensor-related files and identify unusual sensor conditions. The system uses an ASP.NET Core Web API backend and a Blazor WebAssembly frontend.
 
 ## Technologies Used
 
 - .NET 10
+- C#
 - ASP.NET Core Web API
 - Blazor WebAssembly
-- C#
+- Firebase Authentication
 - GitHub
+- Visual Studio 2026
 
 ## Main Features
 
-- Register IoT sensors
-- View registered sensors
-- Monitor simulated telemetry readings
-- Display normal, warning and critical alert states
-- Upload sensor configuration files, logs and deployment images
-- Process telemetry using generics
-- Use operator overloading for telemetry readings
-- Use arrays, recursion and collections
-- Process historical telemetry using jagged arrays
+### Authentication
+- Register new users and sign in using Firebase Authentication.
+- Provide authenticated access to the main application.
+- Send Firebase authentication tokens with API requests.
+
+### Sensor Data Ingestion and Telemetry
+- Register IoT sensors and view registered devices.
+- Upload sensor configuration files and other sensor-related files.
+- Automatically register sensors by parsing supported `.txt` files.
+- Generate simulated temperature readings through the API.
+- Display live telemetry readings and temperature charts.
+- Show Normal, Warning and Critical alert states.
+- View telemetry history and process readings using generic classes.
+
+### Real-Time Command Stream and History
+- View registered devices and their current relay states.
+- Execute commands to switch device relays On or Off.
+- View command history and undo the most recent command.
+- Search for devices and filter them by category and relay state.
+- Process telemetry through queues and manage alerts using a priority queue.
+- Use a stack to manage command history and undo operations.
+- Record user searches and commands to support predictive action suggestions.
+
+### Network Topology and Mesh Routing
+- Display the third architecture area in the application navigation.
+- Reserve network topology and mesh routing functionality for the Final PoE.
 
 ## Smart-X Architecture
 
-The startup page displays the three Smart-X architecture areas:
+The application is organised into three main areas:
 
-- Sensor Data Ingestion and Telemetry - available in Part 1
-- Real-Time Command Stream and History - planned for Part 2
-- Network Topology and Mesh Routing - planned for the Final PoE
+1. **Sensor Data Ingestion and Telemetry** - supports sensor registration, file uploads, live readings and telemetry alerts.
+2. **Real-Time Command Stream and History** - supports device commands, command history, undo operations and predictive suggestions.
+3. **Network Topology and Mesh Routing** - reserved for the Final PoE.
 
 ## Technical Concepts Demonstrated
 
 ### Generic Telemetry Processing
 
-The project uses a generic `TelemetryPacket<T>` class so different sensor values, such as temperature values and switch states, can be handled using the same structure.
+The `TelemetryPacket<T>` class uses generics to handle different types of sensor readings, including numeric temperature values and Boolean switch states.
 
 ### Operator Overloading
 
-The `TelemetryReading` class overloads the `+` operator so two telemetry readings can be combined using normal C# syntax.
+The `TelemetryReading` class overloads the `+`, `-`, `>` and `<` operators. This allows telemetry readings to be combined, compared and evaluated using standard C# operators.
 
 ### Arrays and Recursion
 
-Allowed deployment locations are stored in an array and checked using a recursive validation method.
+Arrays are used to store and process data. Recursive methods are used for location validation.
 
 ### Jagged Arrays and Historical Telemetry
 
-Historical telemetry can be received in batches using a jagged array and converted into a collection for easier processing.
+Jagged arrays can represent historical telemetry readings grouped into batches. These batches can be converted into collections for further processing.
 
 ### Collections
 
-Telemetry arrays can be converted into `List<double>` collections for easier processing.
+The project demonstrates the use of different C# collections:
+
+- `List<T>` for working with groups of telemetry readings.
+- `Queue<T>` for processing telemetry in first-in, first-out order.
+- `PriorityQueue<TElement, TPriority>` for prioritising alerts.
+- `Stack<T>` for managing command history and undo operations.
+- `Dictionary<TKey, TValue>` for storing device and command state information.
+- `SortedDictionary<TKey, TValue>` for organising historical telemetry by timestamp.
+- `HashSet<T>` for tracking unique alert entries and preventing duplicate processing.
+
+### Predictive Action Engine
+
+The predictive action engine uses recorded search and command activity to generate relevant suggestions. Its purpose is to help users repeat common actions more efficiently using previously recorded activity rather than random suggestions.
 
 ### IoT Alerts
 
-The dashboard uses simple temperature thresholds to display Normal, Warning and Critical states.
+Temperature readings are evaluated against configured thresholds to determine whether a reading should be classified as Normal, Warning or Critical.
 
 ### File Uploads
 
-Users can upload sensor-related files such as logs, configuration files and deployment images.
+The application supports uploading sensor-related files, including text files, logs, configuration files and deployment images.
+
+Supported text files can contain sensor details that the API parses and uses to register devices automatically. Other supported file types can be uploaded and saved by the backend.
 
 ## Project Structure
 
-- `SmartX.Api` - ASP.NET Core Web API backend
-- `SmartX.Client` - Blazor WebAssembly frontend
+- `SmartX.Api` - ASP.NET Core Web API backend. Handles sensor registration, telemetry, alerts, file uploads, device commands and supporting services.
+- `SmartX.Client` - Blazor WebAssembly frontend. Provides the user interface, navigation, authentication pages, dashboard, sensor management and command stream.
 
 ## How to Run the Project
 
-1. Open the SmartX solution in Visual Studio 2026.
-2. Make sure .NET 10 is installed.
-3. Configure both `SmartX.Api` and `SmartX.Client` as startup projects.
-4. Run the solution.
-5. Keep both projects running while using the application.
-6. Open the Smart-X frontend in the browser.
-7. Use the navigation menu to access the Dashboard, Sensors and Files pages.
+1. Open the Smart-X solution in Visual Studio 2026.
+2. Ensure that the .NET 10 SDK is installed.
+3. Configure the `SmartX.Api` and `SmartX.Client` projects as startup projects.
+4. Configure the Firebase project and enable Email/Password authentication in the Firebase Console.
+5. Ensure that the frontend Firebase configuration matches the Firebase project used by the API.
+6. Run both projects.
+7. Open the Blazor WebAssembly frontend in your browser.
+8. Register an account or sign in to access the application.
+9. Use the navigation menu to access the Dashboard, Sensors, Files and Command Stream pages.
 
-## API
+**Important:** The API must be running for sensor registration, telemetry processing, file uploads and device commands to work. Sensor and telemetry data are held in memory, so restarting the API clears the current in-memory data.
 
-During development, the backend API runs locally using HTTPS.
+## API Information
 
-Example API address:
+The backend API runs locally over HTTPS during development.
+
+Example API base address:
 
 `https://localhost:7285/`
 
 Example sensor endpoint:
 
-`/api/Sensors`
+`GET /api/Sensors`
 
-OpenAPI information can be viewed at:
+Example file upload endpoint:
+
+`POST /api/Files/upload`
+
+Example telemetry endpoint:
+
+`POST /api/Telemetry/temperature`
+
+Example command endpoint:
+
+`POST /api/Commands/execute`
+
+OpenAPI documentation is available at:
 
 `/openapi/v1.json`
+
+Authenticated endpoints require a valid Firebase ID token.
 
 ## Example Sensor Data
 
 Example sensor registration:
 
-- Sensor Name: `Greenhouse Sensor`
-- Device Identifier: `TEMP-001`
-- Deployment Location: `Greenhouse 1`
-- Category: `Temperature`
+- **Sensor Name:** Greenhouse Sensor
+- **Device Identifier:** TEMP-001
+- **Deployment Location:** Greenhouse 1
+- **Category:** Temperature
 
-Example dashboard readings:
+Example temperature readings:
 
-- `25` = Normal
-- `37` = Warning
-- `45` = Critical
+- `25°C` - Normal
+- `37°C` - Warning
+- `45°C` - Critical
 
-##YouTube video of part 1
+These examples illustrate the configured alert thresholds. Actual classifications depend on the thresholds implemented in the API.
 
+## Part 1 Demonstration
 https://youtu.be/3DCBFUvEJj4
+
 ## Author
 
 Sonali Ramsumar
