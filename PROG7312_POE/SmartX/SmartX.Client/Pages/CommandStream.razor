@@ -1,0 +1,401 @@
+﻿@page "/command-stream"
+@using SmartX.Client.Models
+@using SmartX.Client.Services
+@inject CommandStreamApiService CommandStreamApi
+
+<PageTitle>Command Stream - Smart-X</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Command Stream</h1>
+            <p class="text-muted">
+                Monitor devices and manage manual commands.
+            </p>
+        </div>
+
+        <button class="btn btn-outline-primary"
+                @onclick="LoadCommandStreamAsync"
+                disabled="@isLoading">
+            @(isLoading ? "Loading..." : "Refresh")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (isLoading && stream is null)
+    {
+        <p>Loading command stream...</p>
+    }
+    else if (stream is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted">Registered Devices</h6>
+                        <h2>@stream.Devices.Count</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted">Commands Available to Undo</h6>
+                        <h2>@stream.CommandHistory.Count</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted">Devices Currently On</h6>
+                        <h2>
+                            @stream.Devices.Count(
+                                device => GetRelayState(device.DeviceIdentifier) == "On")
+                        </h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Device Commands</h5>
+
+                <button class="btn btn-warning btn-sm"
+                        @onclick="UndoLastCommandAsync"
+                        disabled="@(isSendingCommand || stream.CommandHistory.Count == 0)">
+                    Undo Last Command
+                </button>
+            </div>
+
+            <div class="card-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-lg-4">
+                        <label for="deviceSearch" class="form-label">
+                            Search devices
+                        </label>
+
+                        <input id="deviceSearch"
+                               class="form-control"
+                               @bind="searchText"
+                               @bind:event="oninput"
+                               placeholder="Search name or identifier..." />
+                    </div>
+
+                    <div class="col-lg-4">
+                        <label for="categoryFilter" class="form-label">
+                            Filter by category
+                        </label>
+
+                        <select id="categoryFilter"
+                                class="form-select"
+                                @bind="selectedCategory">
+                            <option value="All">All categories</option>
+
+                            @foreach (var category in AvailableCategories)
+                            {
+                                <option value="@category">@category</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <label for="stateFilter" class="form-label">
+                            Filter by relay state
+                        </label>
+
+                        <select id="stateFilter"
+                                class="form-select"
+                                @bind="selectedState">
+                            <option value="All">All states</option>
+                            <option value="On">On</option>
+                            <option value="Off">Off</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (!FilteredDevices.Any())
+                {
+                    <p class="text-muted mb-0">
+                        No matching devices found. Try changing your filters.
+                    </p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Sensor Name</th>
+                                    <th>Device Identifier</th>
+                                    <th>Category</th>
+                                    <th>Deployment Location</th>
+                                    <th>Relay State</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var device in FilteredDevices)
+                                {
+                                    var relayState = GetRelayState(device.DeviceIdentifier);
+
+                                    <tr @key="device.DeviceIdentifier">
+                                        <td>@device.SensorName</td>
+                                        <td>
+                                            <strong>@device.DeviceIdentifier</strong>
+                                        </td>
+                                        <td>@device.Category</td>
+                                        <td>@device.DeploymentLocation</td>
+                                        <td>
+                                            <span class="badge @(relayState == "On" ? "bg-success" : "bg-secondary")">
+                                                @relayState
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-success btn-sm me-1"
+                                                    @onclick="() => SetRelayOnAsync(device.DeviceIdentifier)"
+                                                    disabled="@isSendingCommand">
+                                                On
+                                            </button>
+
+                                            <button class="btn btn-secondary btn-sm"
+                                                    @onclick="() => SetRelayOffAsync(device.DeviceIdentifier)"
+                                                    disabled="@isSendingCommand">
+                                                Off
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Command History</h5>
+            </div>
+
+            <div class="card-body">
+                @if (stream.CommandHistory.Count == 0)
+                {
+                    <p class="text-muted mb-0">
+                        No commands are currently available to undo.
+                    </p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Command</th>
+                                    <th>Previous State</th>
+                                    <th>New State</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var command in stream.CommandHistory)
+                                {
+                                    <tr>
+                                        <td>@command.DeviceIdentifier</td>
+                                        <td>@command.CommandName</td>
+                                        <td>@command.PreviousValue</td>
+                                        <td>@command.NewValue</td>
+                                        <td>@command.Timestamp.ToLocalTime().ToString("g")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private CommandStreamResponse? stream;
+    private bool isLoading = true;
+    private bool isSendingCommand;
+    private string? errorMessage;
+
+    private string searchText = string.Empty;
+    private string selectedCategory = "All";
+    private string selectedState = "All";
+
+    // Get the available categories from registered sensors.
+    private IEnumerable<string> AvailableCategories =>
+        (stream?.Devices ?? new List<SensorRegistration>())
+            .Select(device => device.Category)
+            .Where(category => !string.IsNullOrWhiteSpace(category))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(category => category);
+
+    // Apply the search, category, and relay-state filters.
+    private IEnumerable<SensorRegistration> FilteredDevices =>
+        (stream?.Devices ?? new List<SensorRegistration>())
+            .Where(device =>
+                string.IsNullOrWhiteSpace(searchText)
+                || device.DeviceIdentifier.Contains(
+                    searchText,
+                    StringComparison.OrdinalIgnoreCase)
+                || device.SensorName.Contains(
+                    searchText,
+                    StringComparison.OrdinalIgnoreCase))
+            .Where(device =>
+                selectedCategory == "All"
+                || device.Category.Equals(
+                    selectedCategory,
+                    StringComparison.OrdinalIgnoreCase))
+            .Where(device =>
+                selectedState == "All"
+                || GetRelayState(device.DeviceIdentifier).Equals(
+                    selectedState,
+                    StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCommandStreamAsync();
+    }
+
+    // Retrieve the latest information from the backend.
+    private async Task LoadCommandStreamAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            stream = await CommandStreamApi.GetCommandStreamAsync();
+
+            if (stream is null)
+            {
+                errorMessage = "The API returned no command stream data.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Could not connect to the Smart-X API. Check that the API is running.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // Devices without a saved relay state are treated as Off.
+    private string GetRelayState(string deviceIdentifier)
+    {
+        if (stream is null)
+        {
+            return "Off";
+        }
+
+        var deviceEntry = stream.CommandStates.FirstOrDefault(
+            entry => entry.Key.Equals(
+                deviceIdentifier,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (deviceEntry.Value is not null
+            && deviceEntry.Value.TryGetValue(
+                "SetRelayState",
+                out var state))
+        {
+            return state;
+        }
+
+        return "Off";
+    }
+
+    private Task SetRelayOnAsync(string deviceIdentifier)
+    {
+        return SetRelayStateAsync(deviceIdentifier, "On");
+    }
+
+    private Task SetRelayOffAsync(string deviceIdentifier)
+    {
+        return SetRelayStateAsync(deviceIdentifier, "Off");
+    }
+
+    // Execute a command and reload the displayed information.
+    private async Task SetRelayStateAsync(
+        string deviceIdentifier,
+        string newValue)
+    {
+        isSendingCommand = true;
+        errorMessage = null;
+
+        try
+        {
+            using var response =
+                await CommandStreamApi.ExecuteRelayCommandAsync(
+                    deviceIdentifier,
+                    newValue);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage =
+                    $"The command failed. API status: {(int)response.StatusCode}.";
+                return;
+            }
+
+            await LoadCommandStreamAsync();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Could not send the command to the API.";
+        }
+        finally
+        {
+            isSendingCommand = false;
+        }
+    }
+
+    // Undo the latest command and reload the device states.
+    private async Task UndoLastCommandAsync()
+    {
+        isSendingCommand = true;
+        errorMessage = null;
+
+        try
+        {
+            using var response =
+                await CommandStreamApi.UndoLastCommandAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage =
+                    $"Undo failed. API status: {(int)response.StatusCode}.";
+                return;
+            }
+
+            await LoadCommandStreamAsync();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Could not undo the command because the API is unavailable.";
+        }
+        finally
+        {
+            isSendingCommand = false;
+        }
+    }
+}

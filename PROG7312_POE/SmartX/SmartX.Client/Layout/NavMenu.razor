@@ -1,7 +1,11 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Smart-X</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+
+        <button title="Navigation menu"
+                class="navbar-toggler"
+                @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
     </div>
@@ -32,6 +36,13 @@
         </div>
 
         <div class="nav-item px-3">
+            <NavLink class="nav-link" href="command-stream">
+                <span class="bi bi-terminal" aria-hidden="true"></span>
+                Command Stream
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
             <NavLink class="nav-link" href="files">
                 <span class="bi bi-file-earmark-arrow-up" aria-hidden="true"></span>
                 Files
@@ -44,7 +55,8 @@
 @code {
     private bool collapseNavMenu = true;
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private string? NavMenuCssClass =>
+        collapseNavMenu ? "collapse" : null;
 
     private void ToggleNavMenu()
     {
