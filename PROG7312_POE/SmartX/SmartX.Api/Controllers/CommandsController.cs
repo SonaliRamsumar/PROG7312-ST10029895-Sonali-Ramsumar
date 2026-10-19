@@ -24,7 +24,6 @@ namespace SmartX.Api.Controllers
         public IActionResult ExecuteCommand(
             [FromBody] ManualCommandRequest request)
         {
-            // This first version supports relay on/off commands.
             if (!request.CommandName.Equals(
                 "SetRelayState",
                 StringComparison.OrdinalIgnoreCase))
@@ -66,13 +65,12 @@ namespace SmartX.Api.Controllers
                 ? "On"
                 : "Off";
 
-            // Update the device state.
             _stateService.SetValue(
                 deviceIdentifier,
                 commandName,
                 newValue);
 
-            // Save the previous and new values so we can undo this command.
+            // Save the command so it can be undone later.
             _historyService.RecordCommand(new ManualCommand
             {
                 DeviceIdentifier = deviceIdentifier,
@@ -120,8 +118,37 @@ namespace SmartX.Api.Controllers
         [HttpGet("history")]
         public IActionResult GetCommandHistory()
         {
-            // Stack.ToArray returns the newest command first.
+            // The most recent command appears first.
             return Ok(_historyService.GetHistory());
+        }
+
+        [HttpPost("undo")]
+        public IActionResult UndoLastCommand()
+        {
+            // TryPop safely handles an empty stack.
+            if (!_historyService.TryUndo(out var command)
+                || command == null)
+            {
+                return NotFound(new
+                {
+                    Message = "There are no commands available to undo."
+                });
+            }
+
+            // Restore the state that existed before the command.
+            _stateService.SetValue(
+                command.DeviceIdentifier,
+                command.CommandName,
+                command.PreviousValue);
+
+            return Ok(new
+            {
+                Message = "The last command was undone successfully.",
+                DeviceIdentifier = command.DeviceIdentifier,
+                CommandName = command.CommandName,
+                RestoredValue = command.PreviousValue,
+                UndoneValue = command.NewValue
+            });
         }
     }
 }
