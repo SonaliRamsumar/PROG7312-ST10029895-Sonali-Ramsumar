@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.JSInterop
 @inject SmartX.Client.Services.FirebaseAuthService AuthService
+@inject SmartX.Client.Services.FirebaseAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
 <PageTitle>Sign In - Smart-X</PageTitle>
@@ -11,6 +12,7 @@
         <div class="col-sm-10 col-md-7 col-lg-5">
             <div class="card border-0 shadow-lg rounded-4">
                 <div class="card-body p-4 p-md-5">
+
                     <div class="text-center mb-4">
                         <div class="mb-3">
                             <span class="badge rounded-pill text-bg-primary px-3 py-2">
@@ -19,6 +21,7 @@
                         </div>
 
                         <h1 class="h3 fw-bold">Welcome back</h1>
+
                         <p class="text-secondary">
                             Sign in to access your IoT management dashboard.
                         </p>
@@ -78,10 +81,13 @@
                         <span class="text-secondary">
                             New to Smart-X?
                         </span>
-                        <a href="/register" class="fw-semibold text-decoration-none">
+
+                        <a href="/register"
+                           class="fw-semibold text-decoration-none">
                             Create an account
                         </a>
                     </div>
+
                 </div>
             </div>
 
@@ -104,10 +110,15 @@
 
         try
         {
+            // Authenticate the user through Firebase.
             await AuthService.SignInAsync(
                 form.Email.Trim(),
                 form.Password);
 
+            // Update Blazor's authentication state.
+            await AuthStateProvider.RefreshAuthenticationStateAsync();
+
+            // Navigate to the home page after successful login.
             Navigation.NavigateTo("/");
         }
         catch (JSException ex)

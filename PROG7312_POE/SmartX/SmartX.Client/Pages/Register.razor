@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.JSInterop
 @inject SmartX.Client.Services.FirebaseAuthService AuthService
+@inject SmartX.Client.Services.FirebaseAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
 <PageTitle>Create Account - Smart-X</PageTitle>
@@ -121,26 +122,64 @@
 
         try
         {
+            // Create the account through Firebase.
             await AuthService.RegisterAsync(
                 form.Email.Trim(),
                 form.Password);
 
-            // Firebase has registered and signed in the new user.
+            // Tell Blazor that the new user is signed in.
+            await AuthStateProvider.RefreshAuthenticationStateAsync();
+
+            // Return to the application's home page.
             Navigation.NavigateTo("/");
         }
         catch (JSException ex)
         {
-            // Temporary diagnostic message to help identify Firebase errors.
-            errorMessage = ex.Message;
+            errorMessage = GetFriendlyError(ex.Message);
         }
-        catch (Exception ex)
+        catch
         {
-            errorMessage = ex.Message;
+            errorMessage = "Unable to create your account. Please try again.";
         }
         finally
         {
             isBusy = false;
         }
+    }
+
+    private static string GetFriendlyError(string message)
+    {
+        if (message.Contains("auth/email-already-in-use",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "An account with this email already exists. Please sign in.";
+        }
+
+        if (message.Contains("auth/invalid-email",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Please enter a valid email address.";
+        }
+
+        if (message.Contains("auth/weak-password",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Please choose a stronger password with at least 6 characters.";
+        }
+
+        if (message.Contains("auth/operation-not-allowed",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Email and password sign-in is not enabled in Firebase.";
+        }
+
+        if (message.Contains("auth/network-request-failed",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "A network error occurred. Check your connection.";
+        }
+
+        return "Registration failed. Please check your details and try again.";
     }
 
     private class RegisterForm
