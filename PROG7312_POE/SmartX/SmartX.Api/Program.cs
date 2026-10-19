@@ -27,6 +27,7 @@ builder.Services.AddSingleton<CommandStateService>();
 
 // Store actual searches and commands for the predictive action engine.
 builder.Services.AddSingleton<UserActivityService>();
+builder.Services.AddSingleton<PredictiveActionService>();
 
 // Configure Firebase authentication.
 const string firebaseProjectId = "smart-x-iot-management";

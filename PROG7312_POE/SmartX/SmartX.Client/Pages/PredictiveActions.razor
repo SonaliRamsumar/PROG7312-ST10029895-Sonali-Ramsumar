@@ -1,0 +1,152 @@
+﻿@using System.Net.Http.Json
+@using SmartX.Client.Models
+@inject HttpClient Http
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0">Predictive Action Engine</h5>
+            <small class="text-muted">
+                Suggestions based on recorded searches and commands
+            </small>
+        </div>
+
+        <button class="btn btn-outline-primary btn-sm"
+                @onclick="RefreshAsync"
+                disabled="@isLoading">
+            @(isLoading ? "Loading..." : "Refresh")
+        </button>
+    </div>
+
+    <div class="card-body">
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-warning">@errorMessage</div>
+        }
+        else if (isLoading && predictions.Count == 0)
+        {
+            <p>Loading predictions...</p>
+        }
+        else if (predictions.Count == 0)
+        {
+            <p class="text-muted mb-0">
+                No suggestions yet. Search for devices and execute commands
+                to give Smart-X activity to learn from.
+            </p>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var prediction in predictions)
+                {
+                    <div class="col-lg-6" @key="GetKey(prediction)">
+                        <div class="prediction-card h-100">
+                            <div class="d-flex justify-content-between gap-2">
+                                <strong>@prediction.Title</strong>
+                                <span class="badge bg-primary">
+                                    @prediction.Confidence% score
+                                </span>
+                            </div>
+
+                            <p class="text-muted mt-2">
+                                @prediction.Description
+                            </p>
+
+                            <small class="text-muted d-block mb-3">
+                                Based on @prediction.EvidenceCount
+                                recorded occurrence(s).
+                            </small>
+
+                            <button class="btn btn-primary btn-sm"
+                                    @onclick="() => ApplyAsync(prediction)"
+                                    disabled="@isApplying">
+                                Apply Suggestion
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(actionMessage))
+        {
+            <div class="alert alert-info mt-3 mb-0">
+                @actionMessage
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .prediction-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px;
+        background: #fff;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public EventCallback<PredictiveAction> OnApply { get; set; }
+
+    private List<PredictiveAction> predictions = new();
+    private bool isLoading;
+    private bool isApplying;
+    private string errorMessage = string.Empty;
+    private string actionMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    public async Task RefreshAsync()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            predictions =
+                await Http.GetFromJsonAsync<List<PredictiveAction>>(
+                    "api/Activity/predictions")
+                ?? new List<PredictiveAction>();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Could not load predictions. Check that the API is running.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage =
+                "The API returned predictions in an unexpected format.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApplyAsync(PredictiveAction prediction)
+    {
+        isApplying = true;
+        actionMessage = string.Empty;
+
+        try
+        {
+            await OnApply.InvokeAsync(prediction);
+            actionMessage = "Suggestion processed.";
+        }
+        finally
+        {
+            isApplying = false;
+        }
+    }
+
+    private static string GetKey(PredictiveAction prediction)
+    {
+        return $"{prediction.Type}|{prediction.DeviceIdentifier}|{prediction.SuggestedValue}|{prediction.Query}|{prediction.Category}|{prediction.StateFilter}";
+    }
+}

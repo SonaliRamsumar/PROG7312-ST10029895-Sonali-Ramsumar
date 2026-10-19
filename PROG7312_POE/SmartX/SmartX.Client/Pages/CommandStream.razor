@@ -66,6 +66,8 @@
                 </div>
             </div>
         </div>
+        <PredictiveActions @ref="predictiveActions"
+                           OnApply="ApplyPredictionAsync" />
 
         <div class="card shadow-sm mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -233,6 +235,7 @@
     }
 </div>
 
+
 @code {
     private CommandStreamResponse? stream;
     private bool isLoading = true;
@@ -243,11 +246,14 @@
     private string selectedCategory = "All";
     private string selectedState = "All";
 
+    // Reference the predictive actions component so its suggestions can refresh.
+    private PredictiveActions? predictiveActions;
+
     // Get the categories available in the registered sensor list.
     private IEnumerable<string> AvailableCategories =>
         (stream?.Devices ?? new List<SensorRegistration>())
+            .Where(device => !string.IsNullOrWhiteSpace(device.Category))
             .Select(device => device.Category)
-            .Where(category => !string.IsNullOrWhiteSpace(category))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(category => category);
 
@@ -317,18 +323,81 @@
             if (!response.IsSuccessStatusCode)
             {
                 errorMessage = "The search activity could not be recorded.";
+                return;
             }
-            else if (errorMessage ==
-                     "The search activity could not be recorded.")
+
+            if (errorMessage == "The search activity could not be recorded.")
             {
                 errorMessage = null;
             }
+
+            // Refresh predictions after recording the search.
+            await RefreshPredictionsAsync();
         }
         catch (HttpRequestException)
         {
             errorMessage =
                 "Could not record search activity. Check that the API is running.";
         }
+    }
+
+    // Refresh the suggestions using the latest recorded activity.
+    private async Task RefreshPredictionsAsync()
+    {
+        if (predictiveActions is not null)
+        {
+            await predictiveActions.RefreshAsync();
+        }
+    }
+
+    // Apply a search or command suggested by the predictive engine.
+    private async Task ApplyPredictionAsync(PredictiveAction prediction)
+    {
+        errorMessage = null;
+
+        // Apply a previously recorded search and filter combination.
+        if (string.Equals(
+            prediction.Type,
+            "Search",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            searchText = prediction.Query;
+            selectedCategory = prediction.Category;
+            selectedState = prediction.StateFilter;
+
+            await RecordSearchActivityAsync();
+            await LoadCommandStreamAsync();
+
+            await RefreshPredictionsAsync();
+            return;
+        }
+
+        // Only allow the relay command supported by the API.
+        if (string.Equals(
+                prediction.Type,
+                "Command",
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                prediction.CommandName,
+                "SetRelayState",
+                StringComparison.OrdinalIgnoreCase)
+            && (string.Equals(
+                    prediction.SuggestedValue,
+                    "On",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    prediction.SuggestedValue,
+                    "Off",
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            await SetRelayStateAsync(
+                prediction.DeviceIdentifier,
+                prediction.SuggestedValue);
+
+            return;
+        }
+
+        errorMessage = "This suggestion cannot be applied.";
     }
 
     // Devices without a saved relay state are treated as Off.
@@ -388,6 +457,9 @@
             }
 
             await LoadCommandStreamAsync();
+
+            // The command was recorded by the API, so refresh learned patterns.
+            await RefreshPredictionsAsync();
         }
         catch (HttpRequestException)
         {
@@ -418,6 +490,7 @@
             }
 
             await LoadCommandStreamAsync();
+            await RefreshPredictionsAsync();
         }
         catch (HttpRequestException)
         {
