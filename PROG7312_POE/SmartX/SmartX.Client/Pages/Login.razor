@@ -1,0 +1,169 @@
+﻿@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.JSInterop
+@inject SmartX.Client.Services.FirebaseAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Sign In - Smart-X</PageTitle>
+
+<div class="container py-5" style="min-height: 75vh; display: flex; align-items: center;">
+    <div class="row justify-content-center w-100">
+        <div class="col-sm-10 col-md-7 col-lg-5">
+            <div class="card border-0 shadow-lg rounded-4">
+                <div class="card-body p-4 p-md-5">
+                    <div class="text-center mb-4">
+                        <div class="mb-3">
+                            <span class="badge rounded-pill text-bg-primary px-3 py-2">
+                                SMART-X IOT MANAGEMENT
+                            </span>
+                        </div>
+
+                        <h1 class="h3 fw-bold">Welcome back</h1>
+                        <p class="text-secondary">
+                            Sign in to access your IoT management dashboard.
+                        </p>
+                    </div>
+
+                    <EditForm Model="@form" OnValidSubmit="@SignInAsync">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger small" />
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                Email address
+                            </label>
+
+                            <InputText id="email"
+                                       class="form-control form-control-lg"
+                                       type="email"
+                                       autocomplete="email"
+                                       placeholder="you@example.com"
+                                       @bind-Value="form.Email" />
+
+                            <ValidationMessage For="@(() => form.Email)"
+                                               class="text-danger small" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">
+                                Password
+                            </label>
+
+                            <InputText id="password"
+                                       class="form-control form-control-lg"
+                                       type="password"
+                                       autocomplete="current-password"
+                                       placeholder="Enter your password"
+                                       @bind-Value="form.Password" />
+
+                            <ValidationMessage For="@(() => form.Password)"
+                                               class="text-danger small" />
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(errorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert">
+                                @errorMessage
+                            </div>
+                        }
+
+                        <button type="submit"
+                                class="btn btn-primary btn-lg w-100 mt-2"
+                                disabled="@isBusy">
+                            @(isBusy ? "Signing in..." : "Sign In")
+                        </button>
+                    </EditForm>
+
+                    <div class="text-center mt-4">
+                        <span class="text-secondary">
+                            New to Smart-X?
+                        </span>
+                        <a href="/register" class="fw-semibold text-decoration-none">
+                            Create an account
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <p class="text-center text-secondary small mt-4">
+                Secure access to your connected device management system.
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginForm form = new();
+    private bool isBusy;
+    private string? errorMessage;
+
+    private async Task SignInAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            await AuthService.SignInAsync(
+                form.Email.Trim(),
+                form.Password);
+
+            Navigation.NavigateTo("/");
+        }
+        catch (JSException ex)
+        {
+            errorMessage = GetFriendlyError(ex.Message);
+        }
+        catch
+        {
+            errorMessage = "Unable to sign in. Please try again.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private static string GetFriendlyError(string message)
+    {
+        if (message.Contains("auth/invalid-credential",
+                StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("auth/wrong-password",
+                StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("auth/user-not-found",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "The email address or password is incorrect.";
+        }
+
+        if (message.Contains("auth/invalid-email",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Please enter a valid email address.";
+        }
+
+        if (message.Contains("auth/too-many-requests",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Too many attempts. Please wait and try again.";
+        }
+
+        if (message.Contains("auth/network-request-failed",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "A network error occurred. Check your connection.";
+        }
+
+        return "Sign-in failed. Please check your details and try again.";
+    }
+
+    private class LoginForm
+    {
+        [Required(ErrorMessage = "Email address is required.")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}
