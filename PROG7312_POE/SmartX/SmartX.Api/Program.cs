@@ -3,7 +3,7 @@ using SmartX.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add controllers.
 builder.Services.AddControllers();
 
 // Register the application services.
@@ -13,17 +13,16 @@ builder.Services.AddSingleton<LocationValidationService>();
 builder.Services.AddSingleton<FileUploadService>();
 builder.Services.AddSingleton<TelemetryHistoryService>();
 
-// Register the telemetry queue for FIFO processing.
+// Register telemetry processing structures.
 builder.Services.AddSingleton<TelemetryQueue<double>>();
-
-// Register the priority queue for urgent telemetry alerts.
 builder.Services.AddSingleton<AlertPriorityQueue>();
 
-// Store manual commands so they can be undone.
+// Register manual command history and current device states.
 builder.Services.AddSingleton<CommandHistoryService>();
-
-// Store the current command state of each device.
 builder.Services.AddSingleton<CommandStateService>();
+
+// Store actual searches and command activity for the predictive engine.
+builder.Services.AddSingleton<UserActivityService>();
 
 // Allow the Blazor frontend to communicate with the API.
 builder.Services.AddCors(options =>
@@ -42,16 +41,14 @@ var app = builder.Build();
 
 app.UseCors("AllowClient");
 
-// Configure the HTTP request pipeline.
+// Expose OpenAPI documentation in development.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

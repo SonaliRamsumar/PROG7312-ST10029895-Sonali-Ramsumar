@@ -13,14 +13,14 @@ namespace SmartX.Client.Services
             _httpClient = httpClient;
         }
 
-        // Retrieve registered devices, command states, and command history.
+        // Retrieve devices, command states, and command history.
         public async Task<CommandStreamResponse?> GetCommandStreamAsync()
         {
             return await _httpClient.GetFromJsonAsync<CommandStreamResponse>(
                 "api/Commands/stream");
         }
 
-        // Send a request to switch a relay On or Off.
+        // Send a relay command to the backend.
         public async Task<HttpResponseMessage> ExecuteRelayCommandAsync(
             string deviceIdentifier,
             string newValue)
@@ -37,12 +37,30 @@ namespace SmartX.Client.Services
                 request);
         }
 
-        // Ask the API to undo the most recent command.
+        // Undo the most recently executed command.
         public async Task<HttpResponseMessage> UndoLastCommandAsync()
         {
             return await _httpClient.PostAsync(
                 "api/Commands/undo",
                 null);
+        }
+
+        // Send the search and filter choices to the activity tracker.
+        public async Task<HttpResponseMessage> RecordSearchAsync(
+            string query,
+            string category,
+            string stateFilter)
+        {
+            var request = new SearchActivityRequest
+            {
+                Query = query,
+                Category = category,
+                StateFilter = stateFilter
+            };
+
+            return await _httpClient.PostAsJsonAsync(
+                "api/Activity/search",
+                request);
         }
     }
 }

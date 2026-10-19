@@ -12,15 +12,18 @@ namespace SmartX.Api.Controllers
         private readonly CommandStateService _stateService;
         private readonly CommandHistoryService _historyService;
         private readonly SensorService _sensorService;
+        private readonly UserActivityService _activityService;
 
         public CommandsController(
             CommandStateService stateService,
             CommandHistoryService historyService,
-            SensorService sensorService)
+            SensorService sensorService,
+            UserActivityService activityService)
         {
             _stateService = stateService;
             _historyService = historyService;
             _sensorService = sensorService;
+            _activityService = activityService;
         }
 
         // Execute a manual relay command and save it for undo.
@@ -60,7 +63,6 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier = request.DeviceIdentifier.Trim();
             string commandName = "SetRelayState";
 
-            // Treat a relay with no saved state as Off.
             string previousValue =
                 _stateService.GetValue(deviceIdentifier, commandName) ?? "Off";
 
@@ -70,7 +72,6 @@ namespace SmartX.Api.Controllers
             _stateService.SetValue(
                 deviceIdentifier, commandName, newValue);
 
-            // Push the command onto the stack so it can be undone.
             _historyService.RecordCommand(new ManualCommand
             {
                 DeviceIdentifier = deviceIdentifier,
@@ -79,6 +80,10 @@ namespace SmartX.Api.Controllers
                 NewValue = newValue,
                 Timestamp = DateTime.UtcNow
             });
+
+            // Record the successful command for predictive analysis.
+            _activityService.RecordCommand(
+                deviceIdentifier, commandName, newValue);
 
             return Ok(new
             {
@@ -115,7 +120,7 @@ namespace SmartX.Api.Controllers
             });
         }
 
-        // Get the commands that are still in the undo history stack.
+        // Get the commands still available in the undo stack.
         [HttpGet("history")]
         public IActionResult GetCommandHistory()
         {
@@ -140,6 +145,12 @@ namespace SmartX.Api.Controllers
                 command.CommandName,
                 command.PreviousValue);
 
+            // Record the undo separately so it is part of the activity history.
+            _activityService.RecordUndo(
+                command.DeviceIdentifier,
+                command.CommandName,
+                command.PreviousValue);
+
             return Ok(new
             {
                 Message = "The last command was undone successfully.",
@@ -150,8 +161,7 @@ namespace SmartX.Api.Controllers
             });
         }
 
-        // Supply the devices, current command states, and history
-        // together for the Command Stream frontend page.
+        // Supply the data needed by the Command Stream page.
         [HttpGet("stream")]
         public IActionResult GetCommandStream()
         {

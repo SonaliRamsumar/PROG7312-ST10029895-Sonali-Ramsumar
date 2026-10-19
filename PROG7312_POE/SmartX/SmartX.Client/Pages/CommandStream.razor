@@ -88,6 +88,7 @@
                                class="form-control"
                                @bind="searchText"
                                @bind:event="oninput"
+                               @onchange="RecordSearchActivityAsync"
                                placeholder="Search name or identifier..." />
                     </div>
 
@@ -98,7 +99,8 @@
 
                         <select id="categoryFilter"
                                 class="form-select"
-                                @bind="selectedCategory">
+                                @bind="selectedCategory"
+                                @bind:after="RecordSearchActivityAsync">
                             <option value="All">All categories</option>
 
                             @foreach (var category in AvailableCategories)
@@ -115,7 +117,8 @@
 
                         <select id="stateFilter"
                                 class="form-select"
-                                @bind="selectedState">
+                                @bind="selectedState"
+                                @bind:after="RecordSearchActivityAsync">
                             <option value="All">All states</option>
                             <option value="On">On</option>
                             <option value="Off">Off</option>
@@ -239,7 +242,7 @@
     private string selectedCategory = "All";
     private string selectedState = "All";
 
-    // Get the available categories from registered sensors.
+    // Get the categories available in the registered sensor list.
     private IEnumerable<string> AvailableCategories =>
         (stream?.Devices ?? new List<SensorRegistration>())
             .Select(device => device.Category)
@@ -297,6 +300,33 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    // Record completed searches and filter selections for prediction.
+    private async Task RecordSearchActivityAsync()
+    {
+        try
+        {
+            using var response = await CommandStreamApi.RecordSearchAsync(
+                searchText,
+                selectedCategory,
+                selectedState);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = "The search activity could not be recorded.";
+            }
+            else if (errorMessage ==
+                     "The search activity could not be recorded.")
+            {
+                errorMessage = null;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Could not record search activity. Check that the API is running.";
         }
     }
 
