@@ -26,12 +26,25 @@ namespace SmartX.Api.Controllers
             _activityService = activityService;
         }
 
-        // Execute a manual relay command and save it for undo.
+        // Execute a command only for a registered device.
         [HttpPost("execute")]
         public IActionResult ExecuteCommand(
             [FromBody] ManualCommandRequest request)
         {
-            if (!request.CommandName.Equals(
+            // Validate the required command details.
+            if (request == null
+                || string.IsNullOrWhiteSpace(request.DeviceIdentifier)
+                || string.IsNullOrWhiteSpace(request.CommandName)
+                || string.IsNullOrWhiteSpace(request.NewValue))
+            {
+                return BadRequest(new
+                {
+                    Message = "Device identifier, command name and value are required."
+                });
+            }
+
+            if (!string.Equals(
+                request.CommandName,
                 "SetRelayState",
                 StringComparison.OrdinalIgnoreCase))
             {
@@ -41,18 +54,21 @@ namespace SmartX.Api.Controllers
                 });
             }
 
-            if (string.IsNullOrWhiteSpace(request.DeviceIdentifier))
+            string deviceIdentifier = request.DeviceIdentifier.Trim();
+
+            // Prevent commands from being sent to unknown devices.
+            if (!_sensorService.DeviceExists(deviceIdentifier))
             {
-                return BadRequest(new
+                return NotFound(new
                 {
-                    Message = "A device identifier is required."
+                    Message = $"Device '{deviceIdentifier}' is not registered."
                 });
             }
 
-            if (!request.NewValue.Equals(
-                    "On", StringComparison.OrdinalIgnoreCase)
-                && !request.NewValue.Equals(
-                    "Off", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(request.NewValue, "On",
+                    StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(request.NewValue, "Off",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return BadRequest(new
                 {
@@ -60,18 +76,23 @@ namespace SmartX.Api.Controllers
                 });
             }
 
-            string deviceIdentifier = request.DeviceIdentifier.Trim();
             string commandName = "SetRelayState";
 
             string previousValue =
                 _stateService.GetValue(deviceIdentifier, commandName) ?? "Off";
 
-            string newValue = request.NewValue.Equals(
-                "On", StringComparison.OrdinalIgnoreCase) ? "On" : "Off";
+            string newValue = string.Equals(
+                request.NewValue,
+                "On",
+                StringComparison.OrdinalIgnoreCase) ? "On" : "Off";
 
+            // Update the device's stored command state.
             _stateService.SetValue(
-                deviceIdentifier, commandName, newValue);
+                deviceIdentifier,
+                commandName,
+                newValue);
 
+            // Push the command onto the stack so it can be undone.
             _historyService.RecordCommand(new ManualCommand
             {
                 DeviceIdentifier = deviceIdentifier,
@@ -81,9 +102,11 @@ namespace SmartX.Api.Controllers
                 Timestamp = DateTime.UtcNow
             });
 
-            // Record the successful command for predictive analysis.
+            // Record successful commands so predictions learn from real usage.
             _activityService.RecordCommand(
-                deviceIdentifier, commandName, newValue);
+                deviceIdentifier,
+                commandName,
+                newValue);
 
             return Ok(new
             {
@@ -95,7 +118,7 @@ namespace SmartX.Api.Controllers
             });
         }
 
-        // Get the current state of one device command.
+        // Retrieve the current state of a registered device.
         [HttpGet("state")]
         public IActionResult GetCommandState(
             string deviceIdentifier,
@@ -109,18 +132,37 @@ namespace SmartX.Api.Controllers
                 });
             }
 
+            deviceIdentifier = deviceIdentifier.Trim();
+
+            if (!_sensorService.DeviceExists(deviceIdentifier))
+            {
+                return NotFound(new
+                {
+                    Message = $"Device '{deviceIdentifier}' is not registered."
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(commandName))
+            {
+                return BadRequest(new
+                {
+                    Message = "A command name is required."
+                });
+            }
+
             string? currentValue = _stateService.GetValue(
-                deviceIdentifier.Trim(), commandName);
+                deviceIdentifier,
+                commandName.Trim());
 
             return Ok(new
             {
-                DeviceIdentifier = deviceIdentifier.Trim(),
-                CommandName = commandName,
+                DeviceIdentifier = deviceIdentifier,
+                CommandName = commandName.Trim(),
                 CurrentValue = currentValue ?? "Off"
             });
         }
 
-        // Get the commands still available in the undo stack.
+        // Return commands stored in the undo stack.
         [HttpGet("history")]
         public IActionResult GetCommandHistory()
         {
@@ -140,12 +182,13 @@ namespace SmartX.Api.Controllers
                 });
             }
 
+            // Restore the state recorded before the original command.
             _stateService.SetValue(
                 command.DeviceIdentifier,
                 command.CommandName,
                 command.PreviousValue);
 
-            // Record the undo separately so it is part of the activity history.
+            // Keep undo activity separate from ordinary commands.
             _activityService.RecordUndo(
                 command.DeviceIdentifier,
                 command.CommandName,
@@ -161,7 +204,7 @@ namespace SmartX.Api.Controllers
             });
         }
 
-        // Supply the data needed by the Command Stream page.
+        // Supply the data required by the Command Stream page.
         [HttpGet("stream")]
         public IActionResult GetCommandStream()
         {

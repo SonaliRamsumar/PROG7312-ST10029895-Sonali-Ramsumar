@@ -1,45 +1,71 @@
-﻿namespace SmartX.Api.Services
+﻿
+namespace SmartX.Api.Services
 {
     public class LocationValidationService
     {
-        public bool IsValidLocation(string location)
+        // Each location can contain child locations.
+        // This creates a hierarchy instead of a flat array.
+        private sealed class LocationNode
         {
-            string[] allowedLocations =
-            {
-                "Greenhouse 1",
-                "Greenhouse 2",
-                "Warehouse",
-                "Server Room",
-                "Main Office"
-            };
+            public string Name { get; }
 
-            return CheckLocationRecursive(allowedLocations, location, 0);
+            public List<LocationNode> Children { get; }
+
+            public LocationNode(string name, params LocationNode[] children)
+            {
+                Name = name;
+                Children = children.ToList();
+            }
         }
 
-        private bool CheckLocationRecursive(
-            string[] locations,
-            string target,
-            int index)
+        // The facility is the root of the location hierarchy.
+        // The Server Room is inside the Main Office.
+        private static readonly LocationNode Facility = new LocationNode(
+            "Smart-X Facility",
+            new LocationNode("Greenhouse 1"),
+            new LocationNode("Greenhouse 2"),
+            new LocationNode("Warehouse"),
+            new LocationNode(
+                "Main Office",
+                new LocationNode("Server Room")
+            )
+        );
+
+        public bool IsValidLocation(string location)
         {
-            // Stops when we reach the end of the array.
-            if (index >= locations.Length)
+            // Empty location names cannot be valid.
+            if (string.IsNullOrWhiteSpace(location))
             {
                 return false;
             }
 
-            // Returns true if the current location matches.
-            if (locations[index].Equals(
+            // Start recursive searching from the facility root.
+            return CheckLocationRecursive(Facility, location.Trim());
+        }
+
+        private bool CheckLocationRecursive(
+            LocationNode currentNode,
+            string target)
+        {
+            // Check whether the current node matches the target.
+            if (currentNode.Name.Equals(
                 target,
                 StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
 
-            // Checks the next item in the array.
-            return CheckLocationRecursive(
-                locations,
-                target,
-                index + 1);
+            // Recursively search every child and its descendants.
+            foreach (LocationNode child in currentNode.Children)
+            {
+                if (CheckLocationRecursive(child, target))
+                {
+                    return true;
+                }
+            }
+
+            // The target was not found in this branch or its children.
+            return false;
         }
     }
 }

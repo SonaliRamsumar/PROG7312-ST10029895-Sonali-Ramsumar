@@ -1,79 +1,40 @@
 ﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 
-<h1>Smart-X IoT Management System</h1>
+<PageTitle>Smart-X</PageTitle>
 
-<p>
-    Smart-X is used to register, monitor and manage IoT sensors from one dashboard.
-</p>
-
-<div class="row mt-4">
-
-    <div class="col-md-4 mb-3">
-        <div class="card p-3 h-100">
-            <h4>Sensor Data Ingestion and Telemetry</h4>
-
-            <p>
-                Register IoT sensors, monitor telemetry readings and manage sensor-related data.
-            </p>
-
-            <p>
-                <strong>Status:</strong> Available in Part 1
-            </p>
-
-            <a class="btn btn-primary" href="sensors">
-                Open Sensor Management
-            </a>
-        </div>
-    </div>
-
-    <div class="col-md-4 mb-3">
-        <div class="card p-3 h-100">
-            <h4>Real-Time Command Stream and History</h4>
-
-            <p>
-                This section will support real-time device commands and historical telemetry data.
-            </p>
-
-            <p>
-                <strong>Status:</strong> Coming in Part 2
-            </p>
-
-            <button class="btn btn-secondary" disabled>
-                Not Available Yet
-            </button>
-        </div>
-    </div>
-
-    <div class="col-md-4 mb-3">
-        <div class="card p-3 h-100">
-            <h4>Network Topology and Mesh Routing</h4>
-
-            <p>
-                This section will display network topology and routing between Smart-X IoT devices.
-            </p>
-
-            <p>
-                <strong>Status:</strong> Coming in Final PoE
-            </p>
-
-            <button class="btn btn-secondary" disabled>
-                Not Available Yet
-            </button>
-        </div>
-    </div>
-
+<div class="container mt-5 text-center">
+    <h3>Smart-X IoT Management System</h3>
+    <p>Checking your sign-in status...</p>
 </div>
 
-<hr />
+@code {
+    private bool hasRedirected;
 
-<h3 class="mt-4">Part 1 Tools</h3>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Check the login status once the page has rendered.
+        if (!firstRender || hasRedirected)
+        {
+            return;
+        }
 
-<div class="mt-3">
-    <a class="btn btn-outline-primary me-2" href="dashboard">
-        Telemetry Dashboard
-    </a>
+        hasRedirected = true;
 
-    <a class="btn btn-outline-primary" href="files">
-        Sensor File Upload
-    </a>
-</div>
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        // Send authenticated users to the Dashboard.
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/dashboard", replace: true);
+        }
+        else
+        {
+            // Users without a valid login session must sign in.
+            Navigation.NavigateTo("/login", replace: true);
+        }
+    }
+}
