@@ -1,0 +1,5 @@
+
+DeviceIdentifier|SensorName|DeploymentLocation|Category
+TEMP-001|Temperature Sensor|Main Gate|Temperature
+HUM-001|Humidity Sensor|Garden|Humidity
+MOTION-001|Motion Sensor|Parking Area|Security

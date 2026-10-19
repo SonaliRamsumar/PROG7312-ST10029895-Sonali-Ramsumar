@@ -1,4 +1,5 @@
-﻿using SmartX.Api.Models;
+﻿
+using SmartX.Api.Models;
 
 namespace SmartX.Api.Services
 {
@@ -12,6 +13,7 @@ namespace SmartX.Api.Services
                 environment.ContentRootPath,
                 "Uploads");
 
+            // Create the upload folder if it does not exist.
             if (!Directory.Exists(_uploadFolder))
             {
                 Directory.CreateDirectory(_uploadFolder);
@@ -22,7 +24,7 @@ namespace SmartX.Api.Services
         {
             var originalFileName = Path.GetFileName(file.FileName);
 
-            // Adds a unique value so files with the same name are not overwritten.
+            // Give each uploaded file a unique name.
             var uniqueFileName =
                 $"{Guid.NewGuid()}_{originalFileName}";
 
@@ -30,9 +32,14 @@ namespace SmartX.Api.Services
                 _uploadFolder,
                 uniqueFileName);
 
-            using var stream = new FileStream(
+            // Save the uploaded file asynchronously.
+            await using var stream = new FileStream(
                 filePath,
-                FileMode.Create);
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                81920,
+                useAsync: true);
 
             await file.CopyToAsync(stream);
 
