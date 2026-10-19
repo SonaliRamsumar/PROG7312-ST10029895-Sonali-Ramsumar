@@ -1,4 +1,5 @@
-﻿using SmartX.Api.Models;
+﻿
+using SmartX.Api.Models;
 using System.Linq;
 
 namespace SmartX.Api.Services
@@ -7,7 +8,7 @@ namespace SmartX.Api.Services
     {
         public TelemetryPacket<T> CreatePacket<T>(
             string deviceIdentifier,
-            T value)
+            T value) where T : struct
         {
             // T keeps the original data type, such as double, int or bool.
             return new TelemetryPacket<T>

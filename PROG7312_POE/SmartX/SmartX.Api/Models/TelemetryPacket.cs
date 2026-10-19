@@ -1,6 +1,7 @@
-﻿namespace SmartX.Api.Models
+﻿
+namespace SmartX.Api.Models
 {
-    public class TelemetryPacket<T>
+    public class TelemetryPacket<T> where T : struct
     {
         public string DeviceIdentifier { get; set; } = string.Empty;
 

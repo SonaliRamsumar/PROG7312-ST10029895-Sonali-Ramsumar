@@ -1,29 +1,39 @@
-﻿using SmartX.Api.Models;
+﻿
+using SmartX.Api.Models;
 
 namespace SmartX.Api.Services
 {
     public class SensorService
     {
-        private readonly List<SensorRegistration> _sensors = new();
+        // The device identifier is the key used to find each sensor.
+        private readonly Dictionary<string, SensorRegistration> _sensors =
+            new(StringComparer.OrdinalIgnoreCase);
 
         public List<SensorRegistration> GetAll()
         {
-            return _sensors;
+            return _sensors.Values.ToList();
         }
 
         public bool DeviceExists(string deviceIdentifier)
         {
-            // Checks whether this device identifier is already registered.
-            return _sensors.Any(sensor =>
-                sensor.DeviceIdentifier.Equals(
-                    deviceIdentifier,
-                    StringComparison.OrdinalIgnoreCase));
+            // Dictionary lookup checks the identifier without case sensitivity.
+            return !string.IsNullOrWhiteSpace(deviceIdentifier)
+                && _sensors.ContainsKey(deviceIdentifier.Trim());
         }
 
         public SensorRegistration Add(SensorRegistration sensor)
         {
+            sensor.DeviceIdentifier = sensor.DeviceIdentifier.Trim();
+
+            if (_sensors.ContainsKey(sensor.DeviceIdentifier))
+            {
+                throw new InvalidOperationException(
+                    "A sensor with this device identifier is already registered.");
+            }
+
             sensor.Id = _sensors.Count + 1;
-            _sensors.Add(sensor);
+
+            _sensors.Add(sensor.DeviceIdentifier, sensor);
 
             return sensor;
         }
