@@ -1,46 +1,41 @@
 ﻿
+using SmartX.Api.DataStructures;
 using SmartX.Api.Models;
 
 namespace SmartX.Api.Services
 {
     public class TelemetryHistoryService
     {
-        // Each device has its own sorted historical timeline.
-        // The timestamp and sequence number together form a unique key.
+        // Keeps the original insertion order when timestamps are identical.
+        private sealed record HistoricalEntry(
+            long Sequence,
+            TelemetryPacket<double> Packet);
+
+        // Each device has its own AVL tree, ordered by timestamp and sequence.
         private readonly Dictionary<string,
-            SortedDictionary<(DateTime Timestamp, long Sequence),
-            TelemetryPacket<double>>> _deviceHistory =
+            AvlTree<(DateTime Timestamp, long Sequence), HistoricalEntry>> _deviceHistory =
                 new(StringComparer.OrdinalIgnoreCase);
 
-        // Protects historical data from simultaneous access.
         private readonly object _lock = new();
+        private long _nextSequence;
 
-        // Generates a unique sequence number for every reading.
-        private long _sequenceNumber;
-
-        // Returns the total number of historical readings.
         public int Count
         {
             get
             {
                 lock (_lock)
                 {
-                    return _deviceHistory.Values.Sum(
-                        timeline => timeline.Count);
+                    return _deviceHistory.Values.Sum(tree => tree.Count);
                 }
             }
         }
 
-        // Adds a complete telemetry packet to the correct device timeline.
         public void AddReading(TelemetryPacket<double> packet)
         {
-            ArgumentNullException.ThrowIfNull(packet);
-
-            if (string.IsNullOrWhiteSpace(packet.DeviceIdentifier))
+            if (packet == null ||
+                string.IsNullOrWhiteSpace(packet.DeviceIdentifier))
             {
-                throw new ArgumentException(
-                    "A device identifier is required.",
-                    nameof(packet));
+                return;
             }
 
             lock (_lock)
@@ -48,134 +43,98 @@ namespace SmartX.Api.Services
                 string deviceIdentifier = packet.DeviceIdentifier.Trim();
 
                 if (!_deviceHistory.TryGetValue(
-                    deviceIdentifier,
-                    out var timeline))
+                    deviceIdentifier, out var tree))
                 {
-                    timeline = new SortedDictionary<
+                    tree = new AvlTree<
                         (DateTime Timestamp, long Sequence),
-                        TelemetryPacket<double>>();
+                        HistoricalEntry>();
 
-                    _deviceHistory.Add(deviceIdentifier, timeline);
+                    _deviceHistory.Add(deviceIdentifier, tree);
                 }
 
-                // The sequence number prevents identical timestamps
-                // from overwriting one another.
-                long sequence = ++_sequenceNumber;
+                long sequence = ++_nextSequence;
 
-                var historicalPacket = new TelemetryPacket<double>
-                {
-                    DeviceIdentifier = deviceIdentifier,
-                    Timestamp = packet.Timestamp,
-                    Value = packet.Value
-                };
+                var entry = new HistoricalEntry(sequence, packet);
 
-                timeline.Add(
+                // The sequence makes the key unique when timestamps match.
+                tree.Insert(
                     (packet.Timestamp, sequence),
-                    historicalPacket);
+                    entry);
             }
         }
 
-        // Retrieves all devices' readings in chronological order.
-        public List<TelemetryPacket<double>>
-            GetReadingsInChronologicalOrder()
+        public List<TelemetryPacket<double>> GetReadingsInChronologicalOrder(
+            string? deviceIdentifier = null,
+            DateTime? from = null,
+            DateTime? to = null)
         {
             lock (_lock)
             {
-                return _deviceHistory.Values
-                    .SelectMany(timeline => timeline.Values)
-                    .OrderBy(packet => packet.Timestamp)
-                    .ToList();
-            }
-        }
+                var minimumKey = (
+                    Timestamp: from ?? DateTime.MinValue,
+                    Sequence: long.MinValue);
 
-        // Retrieves historical readings belonging to one device.
-        public List<TelemetryPacket<double>> GetReadingsForDevice(
-            string deviceIdentifier)
-        {
-            if (string.IsNullOrWhiteSpace(deviceIdentifier))
-            {
-                return new List<TelemetryPacket<double>>();
-            }
+                var maximumKey = (
+                    Timestamp: to ?? DateTime.MaxValue,
+                    Sequence: long.MaxValue);
 
-            lock (_lock)
-            {
-                if (!_deviceHistory.TryGetValue(
-                    deviceIdentifier.Trim(),
-                    out var timeline))
-                {
-                    return new List<TelemetryPacket<double>>();
-                }
-
-                return timeline.Values.ToList();
-            }
-        }
-
-        // Retrieves readings within a specified date range.
-        // A device identifier can optionally be supplied.
-        public List<TelemetryPacket<double>> GetReadingsInRange(
-            DateTime start,
-            DateTime end,
-            string? deviceIdentifier = null)
-        {
-            if (start > end)
-            {
-                throw new ArgumentException(
-                    "The start date must be before or equal to the end date.");
-            }
-
-            lock (_lock)
-            {
-                var results = new List<TelemetryPacket<double>>();
+                IEnumerable<HistoricalEntry> entries;
 
                 if (!string.IsNullOrWhiteSpace(deviceIdentifier))
                 {
-                    // Search only the selected device's timeline.
-                    if (_deviceHistory.TryGetValue(
-                        deviceIdentifier.Trim(),
-                        out var timeline))
+                    // Search only the selected device's AVL tree.
+                    if (!_deviceHistory.TryGetValue(
+                        deviceIdentifier.Trim(), out var deviceTree))
                     {
-                        results.AddRange(
-                            timeline
-                                .Where(entry =>
-                                    entry.Key.Timestamp >= start &&
-                                    entry.Key.Timestamp <= end)
-                                .Select(entry => entry.Value));
+                        return new List<TelemetryPacket<double>>();
                     }
+
+                    entries = deviceTree.GetRange(
+                        minimumKey,
+                        maximumKey);
                 }
                 else
                 {
-                    // Search every device's timeline.
-                    foreach (var timeline in _deviceHistory.Values)
-                    {
-                        results.AddRange(
-                            timeline
-                                .Where(entry =>
-                                    entry.Key.Timestamp >= start &&
-                                    entry.Key.Timestamp <= end)
-                                .Select(entry => entry.Value));
-                    }
+                    // Search each device tree and combine the results.
+                    entries = _deviceHistory.Values
+                        .SelectMany(tree => tree.GetRange(
+                            minimumKey,
+                            maximumKey));
                 }
 
-                return results
-                    .OrderBy(packet => packet.Timestamp)
+                return entries
+                    .OrderBy(entry => entry.Packet.Timestamp)
+                    .ThenBy(entry => entry.Sequence)
+                    .Select(entry => entry.Packet)
                     .ToList();
             }
         }
 
-        // Preserves the original Part 1 batch conversion functionality.
-        public List<double> ConvertHistoricalBatchesToList(
-            double[][] batches)
+        // Returns the height of one device's AVL tree.
+        // This can be used to demonstrate that the tree remains balanced.
+        public int GetTreeHeight(string deviceIdentifier)
         {
-            ArgumentNullException.ThrowIfNull(batches);
+            lock (_lock)
+            {
+                if (string.IsNullOrWhiteSpace(deviceIdentifier) ||
+                    !_deviceHistory.TryGetValue(
+                        deviceIdentifier.Trim(), out var tree))
+                {
+                    return 0;
+                }
 
+                return tree.Height;
+            }
+        }
+
+        // Retained for the existing jagged-array conversion requirement.
+        public List<double> ConvertHistoricalBatchesToList(double[][] batches)
+        {
             var readings = new List<double>();
 
             foreach (var batch in batches)
             {
-                if (batch != null)
-                {
-                    readings.AddRange(batch);
-                }
+                readings.AddRange(batch);
             }
 
             return readings;
