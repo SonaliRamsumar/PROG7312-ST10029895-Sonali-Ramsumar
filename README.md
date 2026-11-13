@@ -1,6 +1,6 @@
 # Smart-X IoT Management System
 
-Smart-X is a .NET 10 IoT Management System developed to register IoT sensors, monitor telemetry readings, process device commands, manage sensor-related files and identify unusual sensor conditions. The system uses an ASP.NET Core Web API backend and a Blazor WebAssembly frontend.
+Smart-X is a .NET 10 IoT Management System developed to register IoT sensors, monitor telemetry readings, process device commands, manage sensor-related files and monitor network connections. The system uses an ASP.NET Core Web API backend and a Blazor WebAssembly frontend.
 
 ## Technologies Used
 
@@ -9,8 +9,10 @@ Smart-X is a .NET 10 IoT Management System developed to register IoT sensors, mo
 - ASP.NET Core Web API
 - Blazor WebAssembly
 - Firebase Authentication
+- JSON data storage
 - GitHub
 - Visual Studio 2026
+- Postman
 
 ## Main Features
 
@@ -26,7 +28,9 @@ Smart-X is a .NET 10 IoT Management System developed to register IoT sensors, mo
 - Generate simulated temperature readings through the API.
 - Display live telemetry readings and temperature charts.
 - Show Normal, Warning and Critical alert states.
-- View telemetry history and process readings using generic classes.
+- View historical telemetry readings and retrieve readings using date ranges.
+- Save registered sensors and historical temperature readings using JSON files.
+- Restore saved sensor and telemetry information when the API starts.
 
 ### Real-Time Command Stream and History
 - View registered devices and their current relay states.
@@ -38,16 +42,21 @@ Smart-X is a .NET 10 IoT Management System developed to register IoT sensors, mo
 - Record user searches and commands to support predictive action suggestions.
 
 ### Network Topology and Mesh Routing
-- Display the third architecture area in the application navigation.
-- Reserve network topology and mesh routing functionality for the Final PoE.
+- Display registered IoT devices as nodes in a network graph.
+- Create connections between devices and assign connection weights.
+- Save network connections using JSON storage.
+- Use Breadth-First Search (BFS) and Depth-First Search (DFS) to explore the network.
+- Use Prim's Minimum Spanning Tree algorithm to calculate the minimum-cost network connections.
+- Use Dijkstra's algorithm to find the shortest route between two devices.
+- Display network connections, traversal results and routing information on a dedicated dashboard.
 
 ## Smart-X Architecture
 
 The application is organised into three main areas:
 
-1. **Sensor Data Ingestion and Telemetry** - supports sensor registration, file uploads, live readings and telemetry alerts.
+1. **Sensor Data Ingestion and Telemetry** - supports sensor registration, file uploads, live readings, historical telemetry and alerts.
 2. **Real-Time Command Stream and History** - supports device commands, command history, undo operations and predictive suggestions.
-3. **Network Topology and Mesh Routing** - reserved for the Final PoE.
+3. **Network Topology and Mesh Routing** - supports network connections, graph traversal and routing calculations.
 
 ## Technical Concepts Demonstrated
 
@@ -57,7 +66,7 @@ The `TelemetryPacket<T>` class uses generics to handle different types of sensor
 
 ### Operator Overloading
 
-The `TelemetryReading` class overloads the `+`, `-`, `>` and `<` operators. This allows telemetry readings to be combined, compared and evaluated using standard C# operators.
+The `TelemetryReading` class overloads the `+`, `-`, `>` and `<` operators. This allows telemetry readings to be combined and compared using standard C# operators.
 
 ### Arrays and Recursion
 
@@ -65,7 +74,7 @@ Arrays are used to store and process data. Recursive methods are used for locati
 
 ### Jagged Arrays and Historical Telemetry
 
-Jagged arrays can represent historical telemetry readings grouped into batches. These batches can be converted into collections for further processing.
+Jagged arrays are used to represent historical telemetry readings grouped into batches. These batches can be converted into collections for further processing.
 
 ### Collections
 
@@ -76,16 +85,67 @@ The project demonstrates the use of different C# collections:
 - `PriorityQueue<TElement, TPriority>` for prioritising alerts.
 - `Stack<T>` for managing command history and undo operations.
 - `Dictionary<TKey, TValue>` for storing device and command state information.
-- `SortedDictionary<TKey, TValue>` for organising historical telemetry by timestamp.
-- `HashSet<T>` for tracking unique alert entries and preventing duplicate processing.
+- `HashSet<T>` for tracking unique entries and preventing duplicates where required.
+
+### AVL Trees
+
+The `AvlTree<TKey, TValue>` class is used to store historical telemetry readings.
+
+Each registered device has its own AVL tree, with readings organised using their timestamps. The tree automatically balances itself when new readings are inserted.
+
+This allows the application to retrieve historical readings in chronological order and search for readings within a selected date range without having to go through an entire unsorted list.
+
+### Graphs and Network Traversal
+
+The `NetworkGraph` class represents the IoT mesh network using a graph structure.
+
+- Vertices represent registered IoT devices.
+- Edges represent connections between devices.
+- Weights represent the cost of connections.
+
+The graph uses different algorithms to explore and calculate routes through the network.
+
+**Breadth-First Search (BFS)**
+
+BFS explores connected devices level by level. It can be used to identify which devices are reachable from a selected starting device.
+
+**Depth-First Search (DFS)**
+
+DFS explores one branch of the network before moving back to explore other connections.
+
+**Prim's Minimum Spanning Tree**
+
+Prim's algorithm is used to find a minimum spanning tree by selecting connections with the lowest combined weight while connecting the reachable devices.
+
+**Dijkstra's Shortest-Path Algorithm**
+
+Dijkstra's algorithm is used to calculate the lowest-cost route between a selected starting device and destination device.
+
+### Background Telemetry Processing
+
+The `TelemetryProcessingBackgroundService` processes telemetry readings and alerts in the background.
+
+It checks for pending work every second, processes alerts according to their priority and handles telemetry readings in FIFO order. A limit of 25 readings is used for each processing cycle.
 
 ### Predictive Action Engine
 
-The predictive action engine uses recorded search and command activity to generate relevant suggestions. Its purpose is to help users repeat common actions more efficiently using previously recorded activity rather than random suggestions.
+The predictive action engine uses recorded search and command activity to generate suggestions. It uses previous user activity to identify actions that may be useful to the user instead of generating completely random suggestions.
 
 ### IoT Alerts
 
 Temperature readings are evaluated against configured thresholds to determine whether a reading should be classified as Normal, Warning or Critical.
+
+### JSON Persistence
+
+JSON files are used to save certain application data so that it is not lost whenever the API restarts.
+
+The application uses the following files:
+
+- `App_Data/sensors.json` for registered sensors.
+- `App_Data/network-connections.json` for network connections.
+- `App_Data/telemetry-history.json` for historical temperature readings.
+
+The API loads the saved information when it starts and updates the files when new information is added.
 
 ### File Uploads
 
@@ -95,8 +155,8 @@ Supported text files can contain sensor details that the API parses and uses to 
 
 ## Project Structure
 
-- `SmartX.Api` - ASP.NET Core Web API backend. Handles sensor registration, telemetry, alerts, file uploads, device commands and supporting services.
-- `SmartX.Client` - Blazor WebAssembly frontend. Provides the user interface, navigation, authentication pages, dashboard, sensor management and command stream.
+- `SmartX.Api` - ASP.NET Core Web API backend. Handles sensor registration, telemetry, alerts, file uploads, device commands, network connections and supporting services.
+- `SmartX.Client` - Blazor WebAssembly frontend. Provides the user interface, navigation, authentication pages, dashboard, sensor management, command stream and network topology pages.
 
 ## How to Run the Project
 
@@ -108,9 +168,9 @@ Supported text files can contain sensor details that the API parses and uses to 
 6. Run both projects.
 7. Open the Blazor WebAssembly frontend in your browser.
 8. Register an account or sign in to access the application.
-9. Use the navigation menu to access the Dashboard, Sensors, Files and Command Stream pages.
+9. Use the navigation menu to access the Dashboard, Sensors, Files, Command Stream and Network Topology pages.
 
-**Important:** The API must be running for sensor registration, telemetry processing, file uploads and device commands to work. Sensor and telemetry data are held in memory, so restarting the API clears the current in-memory data.
+**Important:** The API must be running for sensor registration, telemetry processing, file uploads, device commands and network operations to work. Registered sensors, network connections and historical temperature readings are saved using JSON files and can be restored when the API restarts. Other temporary information, such as pending queue entries, is not necessarily saved.
 
 ## API Information
 
@@ -132,15 +192,19 @@ Example telemetry endpoint:
 
 `POST /api/Telemetry/temperature`
 
+Example historical telemetry endpoint:
+
+`GET /api/Telemetry/history/readings`
+
 Example command endpoint:
 
 `POST /api/Commands/execute`
 
+Authenticated endpoints require a valid Firebase ID token.
+
 OpenAPI documentation is available at:
 
 `/openapi/v1.json`
-
-Authenticated endpoints require a valid Firebase ID token.
 
 ## Example Sensor Data
 
@@ -154,12 +218,13 @@ Example sensor registration:
 Example temperature readings:
 
 - `25°C` - Normal
-- `37°C` - Warning
+- `38°C` - Warning
 - `45°C` - Critical
 
 These examples illustrate the configured alert thresholds. Actual classifications depend on the thresholds implemented in the API.
 
 ## Part 1 Demonstration
+
 https://youtu.be/3DCBFUvEJj4
 
 ## Author
