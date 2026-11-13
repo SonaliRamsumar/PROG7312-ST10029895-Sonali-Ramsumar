@@ -13,5 +13,25 @@
     "DeviceIdentifier": "Test1",
     "Timestamp": "2026-11-13T15:53:17.9992284Z",
     "Value": 45
+  },
+  {
+    "DeviceIdentifier": "Test1",
+    "Timestamp": "2026-11-13T17:49:31.6689731Z",
+    "Value": 38
+  },
+  {
+    "DeviceIdentifier": "Test1",
+    "Timestamp": "2026-11-13T17:50:11.5919433Z",
+    "Value": 45
+  },
+  {
+    "DeviceIdentifier": "Test1",
+    "Timestamp": "2026-11-13T18:06:43.9086141Z",
+    "Value": 38
+  },
+  {
+    "DeviceIdentifier": "Test1",
+    "Timestamp": "2026-11-13T18:06:53.6722923Z",
+    "Value": 45
   }
 ]
