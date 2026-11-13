@@ -227,6 +227,9 @@ These examples illustrate the configured alert thresholds. Actual classification
 
 https://youtu.be/3DCBFUvEJj4
 
+##Part 3 Demonstration
+https://youtu.be/8aUDEGigHeE
+
 ## Author
 
 Sonali Ramsumar
