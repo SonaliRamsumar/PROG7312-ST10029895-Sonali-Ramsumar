@@ -2,20 +2,18 @@
 namespace SmartX.Api.DataStructures
 {
     // Represents a weighted, undirected network graph.
-    // Each vertex represents a device and each edge represents a connection.
     public class NetworkGraph
     {
         private readonly Dictionary<string, Dictionary<string, double>>
             _adjacencyList = new(StringComparer.OrdinalIgnoreCase);
 
-        // Stores the number of registered vertices.
         public int VertexCount => _adjacencyList.Count;
 
-        // Counts each undirected connection only once.
+        // Each undirected connection is stored in both directions.
+        // Divide by two to count each connection only once.
         public int EdgeCount =>
             _adjacencyList.Values.Sum(neighbours => neighbours.Count) / 2;
 
-        // Adds a device to the graph.
         public void AddVertex(string deviceIdentifier)
         {
             ValidateIdentifier(deviceIdentifier);
@@ -31,7 +29,6 @@ namespace SmartX.Api.DataStructures
             }
         }
 
-        // Adds an undirected connection between two devices.
         public void AddEdge(
             string firstDevice,
             string secondDevice,
@@ -60,7 +57,6 @@ namespace SmartX.Api.DataStructures
             string first = firstDevice.Trim();
             string second = secondDevice.Trim();
 
-            // Make sure both devices exist before connecting them.
             AddVertex(first);
             AddVertex(second);
 
@@ -69,7 +65,6 @@ namespace SmartX.Api.DataStructures
             _adjacencyList[second][first] = weight;
         }
 
-        // Returns all device identifiers in the graph.
         public List<string> GetVertices()
         {
             return _adjacencyList.Keys
@@ -77,7 +72,33 @@ namespace SmartX.Api.DataStructures
                 .ToList();
         }
 
-        // Returns the direct connections for a selected device.
+        // Returns every undirected connection only once.
+        public List<NetworkEdge> GetEdges()
+        {
+            var edges = new List<NetworkEdge>();
+
+            foreach (var device in _adjacencyList)
+            {
+                foreach (var neighbour in device.Value)
+                {
+                    // Avoid returning the reverse copy of the same edge.
+                    if (StringComparer.OrdinalIgnoreCase.Compare(
+                        device.Key, neighbour.Key) < 0)
+                    {
+                        edges.Add(new NetworkEdge(
+                            device.Key,
+                            neighbour.Key,
+                            neighbour.Value));
+                    }
+                }
+            }
+
+            return edges
+                .OrderBy(edge => edge.From)
+                .ThenBy(edge => edge.To)
+                .ToList();
+        }
+
         public Dictionary<string, double> GetNeighbours(
             string deviceIdentifier)
         {
@@ -95,7 +116,7 @@ namespace SmartX.Api.DataStructures
                 StringComparer.OrdinalIgnoreCase);
         }
 
-        // Breadth-First Search visits neighbouring devices level by level.
+        // Breadth-First Search visits devices level by level.
         public List<string> BreadthFirstSearch(string startDevice)
         {
             ValidateStartDevice(startDevice);
@@ -106,8 +127,10 @@ namespace SmartX.Api.DataStructures
             var traversalOrder = new List<string>();
             var queue = new Queue<string>();
 
-            queue.Enqueue(startDevice.Trim());
-            visited.Add(startDevice.Trim());
+            string start = startDevice.Trim();
+
+            queue.Enqueue(start);
+            visited.Add(start);
 
             while (queue.Count > 0)
             {
@@ -127,7 +150,7 @@ namespace SmartX.Api.DataStructures
             return traversalOrder;
         }
 
-        // Depth-First Search explores one branch before backtracking.
+        // Depth-First Search explores each branch before backtracking.
         public List<string> DepthFirstSearch(string startDevice)
         {
             ValidateStartDevice(startDevice);
@@ -166,8 +189,8 @@ namespace SmartX.Api.DataStructures
             }
         }
 
-        // Prim's algorithm creates a minimum spanning forest.
-        // For a connected graph, the result is a minimum spanning tree.
+        // Prim's algorithm builds a minimum spanning forest.
+        // For a connected graph, this is a minimum spanning tree.
         public List<NetworkEdge> GetMinimumSpanningTree(
             string? startDevice = null)
         {
@@ -188,7 +211,6 @@ namespace SmartX.Api.DataStructures
                 .OrderBy(device => device)
                 .ToList();
 
-            // If a starting device is supplied, visit its component first.
             if (!string.IsNullOrWhiteSpace(startDevice))
             {
                 string selectedStart = startDevice.Trim();
@@ -205,7 +227,6 @@ namespace SmartX.Api.DataStructures
 
             foreach (string componentStart in startingOrder)
             {
-                // Skip devices already included in another component.
                 if (!visited.Add(componentStart))
                 {
                     continue;
@@ -220,14 +241,12 @@ namespace SmartX.Api.DataStructures
                 {
                     NetworkEdge edge = priorityQueue.Dequeue();
 
-                    // Ignore edges leading to an already visited device.
                     if (!visited.Add(edge.To))
                     {
                         continue;
                     }
 
                     minimumTree.Add(edge);
-
                     AddAvailableEdges(edge.To);
                 }
 
@@ -276,7 +295,6 @@ namespace SmartX.Api.DataStructures
         }
     }
 
-    // Represents one weighted connection between two devices.
     public record NetworkEdge(
         string From,
         string To,

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using SmartX.Api.Services;
+using SmartX.Api.DataStructures;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,8 @@ builder.Services.AddControllers();
 
 // Register the main application services.
 builder.Services.AddSingleton<SensorService>();
+builder.Services.AddSingleton<NetworkGraph>();
+builder.Services.AddSingleton<NetworkTopologyService>();
 builder.Services.AddSingleton<TelemetryService>();
 builder.Services.AddSingleton<LocationValidationService>();
 builder.Services.AddSingleton<FileUploadService>();
