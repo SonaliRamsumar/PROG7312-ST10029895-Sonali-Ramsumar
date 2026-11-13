@@ -39,11 +39,14 @@ namespace SmartX.Api.Controllers
                 deviceIdentifier,
                 value);
 
-            // Record the reading in the existing history and FIFO queue.
-            _historyService.AddReading(packet.Timestamp, packet.Value);
+            // Store the complete packet in historical storage.
+            // This preserves the device identifier and timestamp.
+            _historyService.AddReading(packet);
+
+            // Add the packet to the FIFO queue for processing.
             _temperatureQueue.Enqueue(packet);
 
-            // Retain the device identifier for the live dashboard.
+            // Retain the packet for the live dashboard.
             _liveTelemetryService.AddReading(packet);
 
             string severity = GetTemperatureSeverity(packet.Value);
@@ -116,20 +119,47 @@ namespace SmartX.Api.Controllers
             return Ok(readings);
         }
 
+        // Returns all stored readings in chronological order.
         [HttpGet("history/readings")]
         public IActionResult GetStoredReadings()
         {
-            // Return numeric readings from oldest to newest.
+            return Ok(_historyService.GetReadingsInChronologicalOrder());
+        }
+
+        // Returns historical readings for one specific device.
+        [HttpGet("history/readings/{deviceIdentifier}")]
+        public IActionResult GetDeviceReadings(string deviceIdentifier)
+        {
             var readings = _historyService
-                .GetReadingsInChronologicalOrder();
+                .GetReadingsForDevice(deviceIdentifier);
 
-            var result = readings.Select(reading => new
+            return Ok(readings);
+        }
+
+        // Returns readings within a date range.
+        // A device identifier can optionally be supplied as a filter.
+        [HttpGet("history/range")]
+        public IActionResult GetReadingsInRange(
+            [FromQuery] DateTime start,
+            [FromQuery] DateTime end,
+            [FromQuery] string? deviceIdentifier = null)
+        {
+            try
             {
-                Timestamp = reading.Timestamp,
-                Value = reading.Value
-            }).ToList();
+                var readings = _historyService.GetReadingsInRange(
+                    start,
+                    end,
+                    deviceIdentifier);
 
-            return Ok(result);
+                return Ok(readings);
+            }
+            catch (ArgumentException exception)
+            {
+                return BadRequest(new
+                {
+                    Message = exception.Message
+                });
+            }
         }
 
         [HttpGet("queue/pending")]
