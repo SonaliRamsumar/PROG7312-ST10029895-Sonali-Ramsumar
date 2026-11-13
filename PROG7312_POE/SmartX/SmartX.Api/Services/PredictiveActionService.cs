@@ -14,155 +14,195 @@ namespace SmartX.Api.Services
 
         public List<PredictiveAction> GetPredictions()
         {
+            // Retrieve the recorded searches and commands.
             var activities = _activityService.GetAll();
+
             var predictions = new List<PredictiveAction>();
 
-            // Learn from recorded relay commands, excluding undo actions.
-            var commands = activities
+            // Find meaningful searches that can be used as triggers.
+            var searches = activities
                 .Where(activity =>
                     string.Equals(
                         activity.ActivityType,
-                        "Command",
-                        StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(
-                        activity.ActionName,
-                        "SetRelayState",
-                        StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrWhiteSpace(activity.Target)
-                    && (string.Equals(
-                            activity.Value,
-                            "On",
-                            StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(
-                            activity.Value,
-                            "Off",
-                            StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            // Find the most frequently used state for each device.
-            foreach (var deviceGroup in commands.GroupBy(
-                activity => activity.Target,
-                StringComparer.OrdinalIgnoreCase))
-            {
-                var preferred = deviceGroup
-                    .GroupBy(
-                        activity => activity.Value,
-                        StringComparer.OrdinalIgnoreCase)
-                    .Select(group => new
-                    {
-                        Value = group.Key,
-                        Count = group.Count(),
-                        Latest = group
-                            .OrderByDescending(item => item.Timestamp)
-                            .First()
-                    })
-                    .OrderByDescending(item => item.Count)
-                    .ThenByDescending(item => item.Latest.Timestamp)
-                    .FirstOrDefault();
-
-                if (preferred == null)
-                {
-                    continue;
-                }
-
-                predictions.Add(new PredictiveAction
-                {
-                    Type = "Command",
-                    Title = $"Set {deviceGroup.Key} to {preferred.Value}",
-                    Description =
-                        $"This relay state was used {preferred.Count} time(s) for this device.",
-                    DeviceIdentifier = deviceGroup.Key,
-                    CommandName = "SetRelayState",
-                    SuggestedValue = preferred.Value,
-                    EvidenceCount = preferred.Count,
-                    Confidence = CalculateConfidence(preferred.Count),
-                    LastObserved = preferred.Latest.Timestamp
-                });
-            }
-
-            // Learn from searches with a query or active filter.
-            var searches = activities
-                .Where(activity => string.Equals(
-                    activity.ActivityType,
-                    "Search",
-                    StringComparison.OrdinalIgnoreCase))
+                        "Search",
+                        StringComparison.OrdinalIgnoreCase))
                 .Where(activity =>
                     !string.IsNullOrWhiteSpace(activity.Target)
                     || !IsAll(activity.Category)
                     || !IsAll(activity.StateFilter))
                 .ToList();
 
-            // Group searches with matching query, category and relay state.
-            var searchGroups = searches.GroupBy(
-                activity => string.Join(
-                    "|",
-                    Normalize(activity.Target),
-                    NormalizeFilter(activity.Category),
-                    NormalizeFilter(activity.StateFilter)),
+            // Group searches with the same query and filter combination.
+            var triggerGroups = searches.GroupBy(
+                activity => CreateTriggerKey(activity),
                 StringComparer.OrdinalIgnoreCase);
 
-            foreach (var group in searchGroups)
+            foreach (var triggerGroup in triggerGroups)
             {
-                var latest = group
+                var triggerSearches = triggerGroup.ToList();
+
+                // Every search in this group represents one occasion
+                // on which the user could have performed a command.
+                int totalTriggerCount = triggerSearches.Count;
+
+                // Store the IDs of the searches in this trigger group.
+                var triggerIds = triggerSearches
+                    .Select(activity => activity.Id)
+                    .ToHashSet();
+
+                // Find successful commands linked to these searches.
+                var linkedCommands = activities
+                    .Where(activity =>
+                        string.Equals(
+                            activity.ActivityType,
+                            "Command",
+                            StringComparison.OrdinalIgnoreCase))
+                    .Where(activity =>
+                        activity.TriggerActivityId.HasValue
+                        && triggerIds.Contains(
+                            activity.TriggerActivityId.Value))
+                    .Where(activity =>
+                        string.Equals(
+                            activity.ActionName,
+                            "SetRelayState",
+                            StringComparison.OrdinalIgnoreCase))
+                    .Where(activity =>
+                        !string.IsNullOrWhiteSpace(activity.Target))
+                    .Where(activity =>
+                        IsValidRelayState(activity.Value))
+                    .ToList();
+
+                if (linkedCommands.Count == 0)
+                {
+                    // No action has been associated with this trigger yet.
+                    // It remains part of the trigger history but cannot
+                    // produce an action suggestion.
+                    continue;
+                }
+
+                // Group commands by device and suggested relay state.
+                var actionGroups = linkedCommands.GroupBy(
+                    activity => string.Join(
+                        "|",
+                        activity.Target.Trim().ToUpperInvariant(),
+                        activity.ActionName.Trim().ToUpperInvariant(),
+                        activity.Value.Trim().ToUpperInvariant()),
+                    StringComparer.OrdinalIgnoreCase);
+
+                var latestSearch = triggerSearches
                     .OrderByDescending(activity => activity.Timestamp)
                     .First();
 
-                var query = Normalize(latest.Target);
-                var category = NormalizeFilter(latest.Category);
-                var state = NormalizeFilter(latest.StateFilter);
+                string triggerDescription =
+                    DescribeTrigger(latestSearch);
 
-                var details = new List<string>();
-
-                if (!string.IsNullOrWhiteSpace(query))
+                foreach (var actionGroup in actionGroups)
                 {
-                    details.Add($"search for \"{query}\"");
+                    var matchingCommands = actionGroup.ToList();
+
+                    int successfulActionCount = matchingCommands.Count;
+
+                    // Confidence is the percentage of matching search
+                    // occasions followed by this particular command.
+                    int confidence = (int)Math.Round(
+                        successfulActionCount * 100.0 / totalTriggerCount,
+                        MidpointRounding.AwayFromZero);
+
+                    var latestCommand = matchingCommands
+                        .OrderByDescending(activity => activity.Timestamp)
+                        .First();
+
+                    predictions.Add(new PredictiveAction
+                    {
+                        Type = "Command",
+
+                        Title =
+                            $"Set {latestCommand.Target} to {latestCommand.Value}",
+
+                        Description =
+                            $"After {triggerDescription}, this command was " +
+                            $"executed {successfulActionCount} out of " +
+                            $"{totalTriggerCount} matching search occasion(s).",
+
+                        DeviceIdentifier = latestCommand.Target,
+                        CommandName = latestCommand.ActionName,
+                        SuggestedValue = latestCommand.Value,
+
+                        Query = latestSearch.Target,
+                        Category = latestSearch.Category,
+                        StateFilter = latestSearch.StateFilter,
+
+                        // Number of times this particular action followed
+                        // the matching trigger.
+                        EvidenceCount = successfulActionCount,
+
+                        Confidence = confidence,
+                        LastObserved = latestCommand.Timestamp
+                    });
                 }
-
-                if (!IsAll(category))
-                {
-                    details.Add($"category {category}");
-                }
-
-                if (!IsAll(state))
-                {
-                    details.Add($"relay state {state}");
-                }
-
-                predictions.Add(new PredictiveAction
-                {
-                    Type = "Search",
-                    Title = "Reuse a previous device search",
-                    Description =
-                        $"You used this search combination {group.Count()} time(s): " +
-                        string.Join(", ", details) + ".",
-                    Query = query,
-                    Category = category,
-                    StateFilter = state,
-                    EvidenceCount = group.Count(),
-                    Confidence = CalculateConfidence(group.Count()),
-                    LastObserved = latest.Timestamp
-                });
             }
 
-            // Display the strongest recorded patterns first.
+            // Display the strongest learned relationships first.
             return predictions
-                .OrderByDescending(item => item.EvidenceCount)
-                .ThenByDescending(item => item.LastObserved)
+                .OrderByDescending(prediction => prediction.Confidence)
+                .ThenByDescending(prediction => prediction.EvidenceCount)
+                .ThenByDescending(prediction => prediction.LastObserved)
                 .Take(4)
                 .ToList();
         }
 
-        private static int CalculateConfidence(int count)
+        // Creates a consistent key for matching search occasions.
+        private static string CreateTriggerKey(UserActivity activity)
         {
-            // This is a simple heuristic score, not a probability.
-            return Math.Min(95, 50 + Math.Max(0, count - 1) * 10);
+            return string.Join(
+                "|",
+                Normalize(activity.Target),
+                NormalizeFilter(activity.Category),
+                NormalizeFilter(activity.StateFilter));
+        }
+
+        // Describes the search pattern that triggered the prediction.
+        private static string DescribeTrigger(UserActivity activity)
+        {
+            var details = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(activity.Target))
+            {
+                details.Add($"search for \"{activity.Target.Trim()}\"");
+            }
+
+            if (!IsAll(activity.Category))
+            {
+                details.Add($"category {activity.Category.Trim()}");
+            }
+
+            if (!IsAll(activity.StateFilter))
+            {
+                details.Add($"relay state {activity.StateFilter.Trim()}");
+            }
+
+            return details.Count > 0
+                ? string.Join(", ", details)
+                : "the recorded search";
+        }
+
+        private static bool IsValidRelayState(string? value)
+        {
+            return string.Equals(
+                       value,
+                       "On",
+                       StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(
+                       value,
+                       "Off",
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsAll(string? value)
         {
             return string.IsNullOrWhiteSpace(value)
                 || string.Equals(
-                    value,
+                    value.Trim(),
                     "All",
                     StringComparison.OrdinalIgnoreCase);
         }
