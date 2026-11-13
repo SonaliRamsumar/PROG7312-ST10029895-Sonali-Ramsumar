@@ -21,6 +21,9 @@ builder.Services.AddSingleton<LiveTelemetryService>();
 builder.Services.AddSingleton<TelemetryQueue<double>>();
 builder.Services.AddSingleton<AlertPriorityQueue>();
 
+// Register the background service that processes telemetry automatically.
+builder.Services.AddHostedService<TelemetryProcessingBackgroundService>();
+
 // Register manual command history and device command states.
 builder.Services.AddSingleton<CommandHistoryService>();
 builder.Services.AddSingleton<CommandStateService>();
