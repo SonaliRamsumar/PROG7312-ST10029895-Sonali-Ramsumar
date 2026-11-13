@@ -11,7 +11,7 @@ namespace SmartX.Client.Models
         public double Weight { get; set; }
     }
 
-    // Represents the topology information returned by the API.
+    // Represents the current network topology.
     public class NetworkTopologyResponse
     {
         public List<SensorRegistration> Devices { get; set; } = new();
@@ -23,7 +23,7 @@ namespace SmartX.Client.Models
         public int EdgeCount { get; set; }
     }
 
-    // Represents the result returned by the minimum spanning tree endpoint.
+    // Represents the minimum spanning tree result.
     public class MinimumSpanningTreeResponse
     {
         public List<NetworkEdge> Connections { get; set; } = new();
@@ -31,5 +31,19 @@ namespace SmartX.Client.Models
         public double TotalWeight { get; set; }
 
         public int ConnectionCount { get; set; }
+    }
+
+    // Represents the result of Dijkstra's shortest-path algorithm.
+    public class NetworkPathResult
+    {
+        public string StartDevice { get; set; } = string.Empty;
+
+        public string DestinationDevice { get; set; } = string.Empty;
+
+        public List<string> Path { get; set; } = new();
+
+        public double? TotalWeight { get; set; }
+
+        public bool Found { get; set; }
     }
 }

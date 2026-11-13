@@ -104,5 +104,25 @@ namespace SmartX.Api.Controllers
                 return BadRequest(exception.Message);
             }
         }
+
+        // GET: api/NetworkTopology/shortest-path/{startDevice}/{destinationDevice}
+        [HttpGet("shortest-path/{startDevice}/{destinationDevice}")]
+        public ActionResult<NetworkPathResult> FindShortestPath(
+            string startDevice,
+            string destinationDevice)
+        {
+            try
+            {
+                var result = _topologyService.FindShortestPath(
+                    startDevice,
+                    destinationDevice);
+
+                return Ok(result);
+            }
+            catch (ArgumentException exception)
+            {
+                return BadRequest(exception.Message);
+            }
+        }
     }
 }

@@ -18,7 +18,7 @@ namespace SmartX.Api.Services
             _networkGraph = networkGraph;
         }
 
-        // Adds every registered sensor as a graph vertex.
+        // Adds registered sensors to the graph as vertices.
         private void SynchroniseSensors()
         {
             foreach (var sensor in _sensorService.GetAll())
@@ -27,7 +27,7 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Returns registered devices and their network connections.
+        // Returns the current network topology.
         public NetworkTopologyResponse GetTopology()
         {
             lock (_lock)
@@ -75,7 +75,7 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Runs Breadth-First Search from a registered device.
+        // Runs Breadth-First Search.
         public List<string> RunBreadthFirstSearch(string startDevice)
         {
             lock (_lock)
@@ -86,7 +86,7 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Runs Depth-First Search from a registered device.
+        // Runs Depth-First Search.
         public List<string> RunDepthFirstSearch(string startDevice)
         {
             lock (_lock)
@@ -97,7 +97,7 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Calculates the minimum spanning tree or forest.
+        // Calculates Prim's minimum spanning tree or forest.
         public List<NetworkEdge> GetMinimumSpanningTree(
             string? startDevice = null)
         {
@@ -106,6 +106,33 @@ namespace SmartX.Api.Services
                 SynchroniseSensors();
 
                 return _networkGraph.GetMinimumSpanningTree(startDevice);
+            }
+        }
+
+        // Finds the lowest-cost route between two registered devices.
+        public NetworkPathResult FindShortestPath(
+            string startDevice,
+            string destinationDevice)
+        {
+            lock (_lock)
+            {
+                SynchroniseSensors();
+
+                if (!_sensorService.DeviceExists(startDevice))
+                {
+                    throw new ArgumentException(
+                        $"Device '{startDevice}' is not registered.");
+                }
+
+                if (!_sensorService.DeviceExists(destinationDevice))
+                {
+                    throw new ArgumentException(
+                        $"Device '{destinationDevice}' is not registered.");
+                }
+
+                return _networkGraph.FindShortestPath(
+                    startDevice,
+                    destinationDevice);
             }
         }
     }

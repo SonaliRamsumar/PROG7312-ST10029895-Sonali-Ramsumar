@@ -1,0 +1,30 @@
+[
+  {
+    "Id": 1,
+    "SensorName": "Test1",
+    "DeviceIdentifier": "T1",
+    "DeploymentLocation": "Greenhouse 1",
+    "Category": "Temperature"
+  },
+  {
+    "Id": 2,
+    "SensorName": "Test2",
+    "DeviceIdentifier": "T2",
+    "DeploymentLocation": "Warehouse",
+    "Category": "Humidity"
+  },
+  {
+    "Id": 3,
+    "SensorName": "Test3",
+    "DeviceIdentifier": "T3",
+    "DeploymentLocation": "Server Room",
+    "Category": "Switch"
+  },
+  {
+    "Id": 4,
+    "SensorName": "Test4",
+    "DeviceIdentifier": "T4",
+    "DeploymentLocation": "Main Office",
+    "Category": "Power"
+  }
+]
