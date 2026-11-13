@@ -7,7 +7,7 @@
         <div>
             <h5 class="mb-0">Predictive Action Engine</h5>
             <small class="text-muted">
-                Suggestions based on recorded searches and commands
+                Suggestions learned from recorded search and command patterns
             </small>
         </div>
 
@@ -30,8 +30,8 @@
         else if (predictions.Count == 0)
         {
             <p class="text-muted mb-0">
-                No suggestions yet. Search for devices and execute commands
-                to give Smart-X activity to learn from.
+                No predictions available yet. Search for devices and execute
+                commands to give Smart-X activity to learn from.
             </p>
         }
         else
@@ -41,21 +41,29 @@
                 {
                     <div class="col-lg-6" @key="GetKey(prediction)">
                         <div class="prediction-card h-100">
-                            <div class="d-flex justify-content-between gap-2">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
                                 <strong>@prediction.Title</strong>
+
                                 <span class="badge bg-primary">
-                                    @prediction.Confidence% score
+                                    @prediction.Confidence% match rate
                                 </span>
                             </div>
 
-                            <p class="text-muted mt-2">
+                            <p class="text-muted mt-2 mb-2">
                                 @prediction.Description
                             </p>
 
-                            <small class="text-muted d-block mb-3">
-                                Based on @prediction.EvidenceCount
-                                recorded occurrence(s).
-                            </small>
+                            <div class="prediction-evidence mb-3">
+                                <small class="text-muted d-block">
+                                    Supporting command examples:
+                                    <strong>@prediction.EvidenceCount</strong>
+                                </small>
+
+                                <small class="text-muted d-block">
+                                    Last observed:
+                                    @prediction.LastObserved.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                                </small>
+                            </div>
 
                             <button class="btn btn-primary btn-sm"
                                     @onclick="() => ApplyAsync(prediction)"
@@ -83,6 +91,11 @@
         border-radius: 10px;
         padding: 16px;
         background: #fff;
+    }
+
+    .prediction-evidence {
+        border-left: 3px solid #0d6efd;
+        padding-left: 10px;
     }
 </style>
 
