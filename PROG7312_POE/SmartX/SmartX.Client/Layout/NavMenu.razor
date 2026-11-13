@@ -19,7 +19,6 @@
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
 
-        <!-- Home remains available as the landing page. -->
         <div class="nav-item px-3">
             <NavLink class="nav-link"
                      href=""
@@ -30,7 +29,6 @@
             </NavLink>
         </div>
 
-        <!-- Show the application modules to signed-in users. -->
         <AuthorizeView>
             <Authorized>
 
@@ -66,16 +64,12 @@
                     </NavLink>
                 </div>
 
-                <!-- Reserved for the final PoE. -->
                 <div class="nav-item px-3">
-                    <span class="nav-link text-secondary"
-                          aria-disabled="true"
-                          title="Available in the final project stage"
-                          style="opacity: 0.5; cursor: not-allowed;">
+                    <NavLink class="nav-link" href="network-topology">
                         <span class="bi bi-diagram-3"
                               aria-hidden="true"></span>
                         Network Topology
-                    </span>
+                    </NavLink>
                 </div>
 
                 <div class="nav-item px-3 mt-3">
@@ -136,7 +130,6 @@
         collapseNavMenu = !collapseNavMenu;
     }
 
-    // Sign out through Firebase and update Blazor's authentication state.
     private async Task LogoutAsync()
     {
         isLoggingOut = true;

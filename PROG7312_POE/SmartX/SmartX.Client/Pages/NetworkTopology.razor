@@ -1,0 +1,574 @@
+﻿@page "/network-topology"
+@attribute [Authorize]
+
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@using SmartX.Client.Models
+
+@inject HttpClient Http
+
+<PageTitle>Network Topology</PageTitle>
+
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3>Network Topology</h3>
+            <p class="text-muted mb-0">
+                Manage device connections and explore network structure.
+            </p>
+        </div>
+
+        <button class="btn btn-outline-primary"
+                @onclick="RefreshAsync"
+                disabled="@isLoading">
+            @(isLoading ? "Refreshing..." : "Refresh")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success">
+            @successMessage
+        </div>
+    }
+
+    @if (isLoading && topology == null)
+    {
+        <p>Loading network topology...</p>
+    }
+    else if (topology != null)
+    {
+        <div class="row g-3 mb-4">
+
+            <div class="col-md-4">
+                <div class="topology-stat">
+                    <span class="stat-label">Registered Devices</span>
+                    <h3>@topology.VertexCount</h3>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="topology-stat">
+                    <span class="stat-label">Network Connections</span>
+                    <h3>@topology.EdgeCount</h3>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="topology-stat">
+                    <span class="stat-label">Minimum Tree Connections</span>
+                    <h3>@(minimumTree?.ConnectionCount ?? 0)</h3>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="row g-4">
+
+            <!-- Registered Devices -->
+            <div class="col-lg-6">
+                <div class="topology-panel h-100">
+                    <h5>Registered Devices</h5>
+
+                    @if (topology.Devices.Count == 0)
+                    {
+                        <p class="text-muted">
+                            No devices are registered yet.
+                            Register sensors before creating connections.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Name</th>
+                                        <th>Location</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @foreach (var device in topology.Devices)
+                                    {
+                                        <tr @key="device.DeviceIdentifier">
+                                            <td>@device.DeviceIdentifier</td>
+                                            <td>@device.SensorName</td>
+                                            <td>@device.DeploymentLocation</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Create Network Connection -->
+            <div class="col-lg-6">
+                <div class="topology-panel h-100">
+                    <h5>Create Network Connection</h5>
+
+                    <div class="mb-3">
+                        <label class="form-label">First Device</label>
+
+                        <select class="form-select" @bind="firstDevice">
+                            <option value="">Select a device</option>
+
+                            @foreach (var device in topology.Devices)
+                            {
+                                <option value="@device.DeviceIdentifier">
+                                    @device.DeviceIdentifier
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Second Device</label>
+
+                        <select class="form-select" @bind="secondDevice">
+                            <option value="">Select a device</option>
+
+                            @foreach (var device in topology.Devices)
+                            {
+                                <option value="@device.DeviceIdentifier">
+                                    @device.DeviceIdentifier
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Connection Weight</label>
+
+                        <input class="form-control"
+                               type="number"
+                               min="0"
+                               step="0.1"
+                               @bind="connectionWeight" />
+
+                        <small class="text-muted">
+                            Represents the connection cost used by Prim's algorithm.
+                        </small>
+                    </div>
+
+                    <button class="btn btn-primary"
+                            @onclick="AddConnectionAsync"
+                            disabled="@(!CanAddConnection || isSaving)">
+                        @(isSaving ? "Creating..." : "Create Connection")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Existing Connections -->
+            <div class="col-12">
+                <div class="topology-panel">
+                    <h5>Existing Connections</h5>
+
+                    @if (topology.Connections.Count == 0)
+                    {
+                        <p class="text-muted mb-0">
+                            No network connections have been created yet.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>From Device</th>
+                                        <th>To Device</th>
+                                        <th>Weight</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @foreach (var connection in topology.Connections)
+                                    {
+                                        <tr @key="connection.From + '-' + connection.To">
+                                            <td>@connection.From</td>
+                                            <td>@connection.To</td>
+                                            <td>@connection.Weight</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Network Traversal -->
+            <div class="col-lg-6">
+                <div class="topology-panel h-100">
+                    <h5>Network Traversal</h5>
+
+                    <p class="text-muted">
+                        Select a starting device to explore connected devices.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label">Starting Device</label>
+
+                        <select class="form-select" @bind="startDevice">
+                            <option value="">Select a device</option>
+
+                            @foreach (var device in topology.Devices)
+                            {
+                                <option value="@device.DeviceIdentifier">
+                                    @device.DeviceIdentifier
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-primary"
+                                @onclick="RunBfsAsync"
+                                disabled="@(string.IsNullOrWhiteSpace(startDevice) || isProcessing)">
+                            Run BFS
+                        </button>
+
+                        <button class="btn btn-outline-primary"
+                                @onclick="RunDfsAsync"
+                                disabled="@(string.IsNullOrWhiteSpace(startDevice) || isProcessing)">
+                            Run DFS
+                        </button>
+                    </div>
+
+                    @if (traversalResults.Count > 0)
+                    {
+                        <div class="result-panel mt-3">
+                            <strong>@traversalTitle</strong>
+
+                            <ol class="mb-0 mt-2">
+                                @foreach (var device in traversalResults)
+                                {
+                                    <li>@device</li>
+                                }
+                            </ol>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Minimum Spanning Tree -->
+            <div class="col-lg-6">
+                <div class="topology-panel h-100">
+                    <h5>Minimum Spanning Tree</h5>
+
+                    <p class="text-muted">
+                        Find the lowest total connection weight needed to
+                        connect each network component.
+                    </p>
+
+                    <button class="btn btn-outline-primary"
+                            @onclick="CalculateMinimumTreeAsync"
+                            disabled="@isProcessing">
+                        Calculate Minimum Spanning Tree
+                    </button>
+
+                    @if (minimumTree != null)
+                    {
+                        <div class="result-panel mt-3">
+
+                            <p>
+                                <strong>Total Weight:</strong>
+                                @minimumTree.TotalWeight
+                            </p>
+
+                            <p>
+                                <strong>Connections:</strong>
+                                @minimumTree.ConnectionCount
+                            </p>
+
+                            @if (minimumTree.Connections.Count == 0)
+                            {
+                                <p class="text-muted mb-0">
+                                    No connections are required for this result.
+                                </p>
+                            }
+                            else
+                            {
+                                <ul class="mb-0">
+                                    @foreach (var edge in minimumTree.Connections)
+                                    {
+                                        <li>
+                                            @edge.From to @edge.To
+                                            (Weight: @edge.Weight)
+                                        </li>
+                                    }
+                                </ul>
+                            }
+
+                        </div>
+                    }
+                </div>
+            </div>
+
+        </div>
+    }
+</div>
+
+<style>
+    .topology-stat {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 20px;
+        height: 100%;
+    }
+
+    .stat-label {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+    .topology-stat h3 {
+        margin: 8px 0 0;
+        color: #123b70;
+    }
+
+    .topology-panel {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 20px;
+    }
+
+        .topology-panel h5 {
+            color: #123b70;
+            margin-bottom: 16px;
+        }
+
+    .result-panel {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 14px;
+    }
+</style>
+
+@code {
+    private NetworkTopologyResponse? topology;
+    private MinimumSpanningTreeResponse? minimumTree;
+
+    private List<string> traversalResults = new();
+
+    private string firstDevice = string.Empty;
+    private string secondDevice = string.Empty;
+    private string startDevice = string.Empty;
+
+    private double connectionWeight = 1;
+
+    private string traversalTitle = string.Empty;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+
+    private bool isLoading;
+    private bool isSaving;
+    private bool isProcessing;
+
+    private bool CanAddConnection =>
+        !string.IsNullOrWhiteSpace(firstDevice) &&
+        !string.IsNullOrWhiteSpace(secondDevice) &&
+        !firstDevice.Equals(
+            secondDevice,
+            StringComparison.OrdinalIgnoreCase) &&
+        connectionWeight >= 0 &&
+        !double.IsNaN(connectionWeight) &&
+        !double.IsInfinity(connectionWeight);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    // Loads the latest network topology from the API.
+    private async Task RefreshAsync()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            topology = await Http.GetFromJsonAsync<NetworkTopologyResponse>(
+                "api/NetworkTopology");
+
+            topology ??= new NetworkTopologyResponse();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Could not load network topology. Check that the API is running.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage =
+                "The API returned network information in an unexpected format.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // Creates a connection between two registered devices.
+    private async Task AddConnectionAsync()
+    {
+        if (!CanAddConnection)
+        {
+            errorMessage =
+                "Select two different registered devices and enter a valid weight.";
+
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        try
+        {
+            var request = new
+            {
+                FirstDevice = firstDevice,
+                SecondDevice = secondDevice,
+                Weight = connectionWeight
+            };
+
+            using var response = await Http.PostAsJsonAsync(
+                "api/NetworkTopology/connections",
+                request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            successMessage = "Network connection created successfully.";
+
+            firstDevice = string.Empty;
+            secondDevice = string.Empty;
+            connectionWeight = 1;
+
+            await RefreshAsync();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Unable to create the network connection.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    // Runs Breadth-First Search.
+    private Task RunBfsAsync()
+    {
+        return RunTraversalAsync("bfs");
+    }
+
+    // Runs Depth-First Search.
+    private Task RunDfsAsync()
+    {
+        return RunTraversalAsync("dfs");
+    }
+
+    private async Task RunTraversalAsync(string algorithm)
+    {
+        if (string.IsNullOrWhiteSpace(startDevice))
+        {
+            return;
+        }
+
+        isProcessing = true;
+        errorMessage = string.Empty;
+        traversalResults.Clear();
+
+        try
+        {
+            string encodedDevice = Uri.EscapeDataString(startDevice);
+
+            string endpoint = algorithm == "bfs"
+                ? $"api/NetworkTopology/bfs/{encodedDevice}"
+                : $"api/NetworkTopology/dfs/{encodedDevice}";
+
+            traversalResults =
+                await Http.GetFromJsonAsync<List<string>>(endpoint)
+                ?? new List<string>();
+
+            traversalTitle = algorithm == "bfs"
+                ? "Breadth-First Search Result"
+                : "Depth-First Search Result";
+
+            if (traversalResults.Count == 0)
+            {
+                errorMessage =
+                    "No connected devices were found from the selected starting device.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Unable to run the selected traversal.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage = "The traversal result could not be read.";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    // Calculates Prim's minimum spanning tree.
+    private async Task CalculateMinimumTreeAsync()
+    {
+        isProcessing = true;
+        errorMessage = string.Empty;
+        minimumTree = null;
+
+        try
+        {
+            string endpoint =
+                "api/NetworkTopology/minimum-spanning-tree";
+
+            if (!string.IsNullOrWhiteSpace(startDevice))
+            {
+                endpoint +=
+                    $"?startDevice={Uri.EscapeDataString(startDevice)}";
+            }
+
+            minimumTree =
+                await Http.GetFromJsonAsync<MinimumSpanningTreeResponse>(
+                    endpoint);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage =
+                "Unable to calculate the minimum spanning tree.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            errorMessage =
+                "The minimum spanning tree result could not be read.";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}
