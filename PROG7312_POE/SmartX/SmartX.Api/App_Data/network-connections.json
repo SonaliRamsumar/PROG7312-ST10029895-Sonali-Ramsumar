@@ -13,5 +13,10 @@
     "From": "T2",
     "To": "T3",
     "Weight": 5
+  },
+  {
+    "From": "T3",
+    "To": "T5",
+    "Weight": 2
   }
 ]

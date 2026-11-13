@@ -26,5 +26,12 @@
     "DeviceIdentifier": "T4",
     "DeploymentLocation": "Main Office",
     "Category": "Power"
+  },
+  {
+    "Id": 5,
+    "SensorName": "Test5",
+    "DeviceIdentifier": "T5",
+    "DeploymentLocation": "Warehouse",
+    "Category": "Temperature"
   }
 ]
