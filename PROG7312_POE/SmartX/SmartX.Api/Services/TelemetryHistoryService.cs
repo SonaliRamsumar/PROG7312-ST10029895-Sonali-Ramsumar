@@ -6,12 +6,10 @@ namespace SmartX.Api.Services
 {
     public class TelemetryHistoryService
     {
-        // Keeps the original insertion order when timestamps are identical.
         private sealed record HistoricalEntry(
             long Sequence,
             TelemetryPacket<double> Packet);
 
-        // Each device has its own AVL tree, ordered by timestamp and sequence.
         private readonly Dictionary<string,
             AvlTree<(DateTime Timestamp, long Sequence), HistoricalEntry>> _deviceHistory =
                 new(StringComparer.OrdinalIgnoreCase);
@@ -56,18 +54,25 @@ namespace SmartX.Api.Services
 
                 var entry = new HistoricalEntry(sequence, packet);
 
-                // The sequence makes the key unique when timestamps match.
                 tree.Insert(
                     (packet.Timestamp, sequence),
                     entry);
             }
         }
 
+        // Returns all readings in chronological order.
         public List<TelemetryPacket<double>> GetReadingsInChronologicalOrder(
             string? deviceIdentifier = null,
             DateTime? from = null,
             DateTime? to = null)
         {
+            if (from.HasValue &&
+                to.HasValue &&
+                from.Value > to.Value)
+            {
+                return new List<TelemetryPacket<double>>();
+            }
+
             lock (_lock)
             {
                 var minimumKey = (
@@ -82,7 +87,6 @@ namespace SmartX.Api.Services
 
                 if (!string.IsNullOrWhiteSpace(deviceIdentifier))
                 {
-                    // Search only the selected device's AVL tree.
                     if (!_deviceHistory.TryGetValue(
                         deviceIdentifier.Trim(), out var deviceTree))
                     {
@@ -95,7 +99,6 @@ namespace SmartX.Api.Services
                 }
                 else
                 {
-                    // Search each device tree and combine the results.
                     entries = _deviceHistory.Values
                         .SelectMany(tree => tree.GetRange(
                             minimumKey,
@@ -110,8 +113,36 @@ namespace SmartX.Api.Services
             }
         }
 
+        // Returns readings for one device.
+        public List<TelemetryPacket<double>> GetReadingsForDevice(
+            string deviceIdentifier)
+        {
+            if (string.IsNullOrWhiteSpace(deviceIdentifier))
+            {
+                return new List<TelemetryPacket<double>>();
+            }
+
+            return GetReadingsInChronologicalOrder(deviceIdentifier);
+        }
+
+        // Returns readings within an inclusive date range.
+        public List<TelemetryPacket<double>> GetReadingsInRange(
+            DateTime start,
+            DateTime end,
+            string? deviceIdentifier = null)
+        {
+            if (start > end)
+            {
+                return new List<TelemetryPacket<double>>();
+            }
+
+            return GetReadingsInChronologicalOrder(
+                deviceIdentifier,
+                start,
+                end);
+        }
+
         // Returns the height of one device's AVL tree.
-        // This can be used to demonstrate that the tree remains balanced.
         public int GetTreeHeight(string deviceIdentifier)
         {
             lock (_lock)
@@ -127,8 +158,9 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Retained for the existing jagged-array conversion requirement.
-        public List<double> ConvertHistoricalBatchesToList(double[][] batches)
+        // Converts historical batches into a standard list.
+        public List<double> ConvertHistoricalBatchesToList(
+            double[][] batches)
         {
             var readings = new List<double>();
 
