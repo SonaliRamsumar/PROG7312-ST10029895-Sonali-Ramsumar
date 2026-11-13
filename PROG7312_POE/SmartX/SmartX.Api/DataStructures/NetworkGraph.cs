@@ -1,4 +1,6 @@
 ﻿
+using SmartX.Api.Models;
+
 namespace SmartX.Api.DataStructures
 {
     // Represents a weighted, undirected network graph.
@@ -9,8 +11,6 @@ namespace SmartX.Api.DataStructures
 
         public int VertexCount => _adjacencyList.Count;
 
-        // Each undirected connection is stored in both directions.
-        // Divide by two to count each connection only once.
         public int EdgeCount =>
             _adjacencyList.Values.Sum(neighbours => neighbours.Count) / 2;
 
@@ -60,7 +60,6 @@ namespace SmartX.Api.DataStructures
             AddVertex(first);
             AddVertex(second);
 
-            // Store the connection in both directions.
             _adjacencyList[first][second] = weight;
             _adjacencyList[second][first] = weight;
         }
@@ -72,7 +71,6 @@ namespace SmartX.Api.DataStructures
                 .ToList();
         }
 
-        // Returns every undirected connection only once.
         public List<NetworkEdge> GetEdges()
         {
             var edges = new List<NetworkEdge>();
@@ -81,7 +79,6 @@ namespace SmartX.Api.DataStructures
             {
                 foreach (var neighbour in device.Value)
                 {
-                    // Avoid returning the reverse copy of the same edge.
                     if (StringComparer.OrdinalIgnoreCase.Compare(
                         device.Key, neighbour.Key) < 0)
                     {
@@ -190,7 +187,6 @@ namespace SmartX.Api.DataStructures
         }
 
         // Prim's algorithm builds a minimum spanning forest.
-        // For a connected graph, this is a minimum spanning tree.
         public List<NetworkEdge> GetMinimumSpanningTree(
             string? startDevice = null)
         {
@@ -273,6 +269,127 @@ namespace SmartX.Api.DataStructures
             return minimumTree;
         }
 
+        // Dijkstra calculates the lowest-cost route between two devices.
+        public NetworkPathResult FindShortestPath(
+            string startDevice,
+            string destinationDevice)
+        {
+            ValidateStartDevice(startDevice);
+            ValidateStartDevice(destinationDevice);
+
+            string start = startDevice.Trim();
+            string destination = destinationDevice.Trim();
+
+            var distances = new Dictionary<string, double>(
+                StringComparer.OrdinalIgnoreCase);
+
+            var previous = new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (string device in _adjacencyList.Keys)
+            {
+                distances[device] = double.PositiveInfinity;
+            }
+
+            distances[start] = 0;
+
+            var priorityQueue = new PriorityQueue<string, double>();
+            priorityQueue.Enqueue(start, 0);
+
+            while (priorityQueue.Count > 0)
+            {
+                priorityQueue.TryDequeue(
+                    out string? current,
+                    out double currentDistance);
+
+                if (current == null)
+                {
+                    continue;
+                }
+
+                // Ignore outdated queue entries.
+                if (currentDistance > distances[current])
+                {
+                    continue;
+                }
+
+                // The shortest route to the destination is now known.
+                if (current.Equals(
+                    destination,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                foreach (var neighbour in _adjacencyList[current])
+                {
+                    double newDistance =
+                        currentDistance + neighbour.Value;
+
+                    if (newDistance < distances[neighbour.Key])
+                    {
+                        distances[neighbour.Key] = newDistance;
+                        previous[neighbour.Key] = current;
+
+                        priorityQueue.Enqueue(
+                            neighbour.Key,
+                            newDistance);
+                    }
+                }
+            }
+
+            // No route exists between the selected devices.
+            if (double.IsPositiveInfinity(distances[destination]))
+            {
+                return new NetworkPathResult
+                {
+                    StartDevice = start,
+                    DestinationDevice = destination,
+                    Found = false,
+                    TotalWeight = null,
+                    Path = new List<string>()
+                };
+            }
+
+            // Reconstruct the route from destination to start.
+            var path = new List<string>();
+            string currentDevice = destination;
+
+            path.Add(currentDevice);
+
+            while (!currentDevice.Equals(
+                start,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                if (!previous.TryGetValue(
+                    currentDevice, out string? previousDevice))
+                {
+                    return new NetworkPathResult
+                    {
+                        StartDevice = start,
+                        DestinationDevice = destination,
+                        Found = false,
+                        TotalWeight = null,
+                        Path = new List<string>()
+                    };
+                }
+
+                currentDevice = previousDevice;
+                path.Add(currentDevice);
+            }
+
+            path.Reverse();
+
+            return new NetworkPathResult
+            {
+                StartDevice = start,
+                DestinationDevice = destination,
+                Path = path,
+                TotalWeight = distances[destination],
+                Found = true
+            };
+        }
+
         private void ValidateStartDevice(string startDevice)
         {
             ValidateIdentifier(startDevice);
@@ -280,7 +397,7 @@ namespace SmartX.Api.DataStructures
             if (!_adjacencyList.ContainsKey(startDevice.Trim()))
             {
                 throw new ArgumentException(
-                    "The starting device does not exist in the graph.",
+                    "The selected device does not exist in the graph.",
                     nameof(startDevice));
             }
         }
