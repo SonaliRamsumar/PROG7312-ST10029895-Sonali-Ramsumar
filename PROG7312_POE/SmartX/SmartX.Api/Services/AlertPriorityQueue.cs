@@ -6,107 +6,150 @@ namespace SmartX.Api.Services
 {
     public class AlertPriorityQueue
     {
+        // Stores alerts according to their priority.
         private readonly PriorityQueue<TelemetryAlert, int> _alerts = new();
 
-        // Tracks alert types that are already waiting in the queue.
+        // Tracks alerts that are already waiting in the queue.
         private readonly HashSet<string> _pendingAlertKeys =
             new(StringComparer.OrdinalIgnoreCase);
 
-        // Remembers processed alert events so the same event cannot be processed twice.
+        // Remembers alerts that have already been processed.
         private readonly HashSet<string> _processedAlertKeys =
             new(StringComparer.OrdinalIgnoreCase);
 
-        public int Count => _alerts.Count;
+        // Synchronises access when the API and background service
+        // work with the priority queue simultaneously.
+        private readonly object _lock = new();
 
-        public int ProcessedAlertCount => _processedAlertKeys.Count;
+        public int Count
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _alerts.Count;
+                }
+            }
+        }
+
+        public int ProcessedAlertCount
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _processedAlertKeys.Count;
+                }
+            }
+        }
 
         public bool EnqueueAlert(TelemetryAlert alert)
         {
-            string eventKey = CreateEventKey(alert);
+            ArgumentNullException.ThrowIfNull(alert);
 
-            // Do not enqueue an event that has already been processed.
-            if (_processedAlertKeys.Contains(eventKey))
+            lock (_lock)
             {
-                return false;
+                string eventKey = CreateEventKey(alert);
+
+                // Do not enqueue an event that was already processed.
+                if (_processedAlertKeys.Contains(eventKey))
+                {
+                    return false;
+                }
+
+                string pendingKey = CreatePendingKey(alert);
+
+                // Prevent identical alerts from waiting in the queue twice.
+                if (!_pendingAlertKeys.Add(pendingKey))
+                {
+                    return false;
+                }
+
+                int priority = GetPriority(alert.Severity);
+
+                // Add the alert using its calculated priority.
+                _alerts.Enqueue(alert, priority);
+
+                return true;
             }
-
-            string pendingKey = CreatePendingKey(alert);
-
-            // Prevent the same device alert from being queued repeatedly
-            // while an identical alert is already waiting.
-            if (!_pendingAlertKeys.Add(pendingKey))
-            {
-                return false;
-            }
-
-            int priority = GetPriority(alert.Severity);
-            _alerts.Enqueue(alert, priority);
-
-            return true;
         }
 
         public bool TryDequeueAlert(out TelemetryAlert? alert)
         {
-            while (_alerts.TryDequeue(out var next, out _))
+            lock (_lock)
             {
-                if (next == null)
+                while (_alerts.TryDequeue(out var next, out _))
                 {
-                    continue;
+                    if (next == null)
+                    {
+                        continue;
+                    }
+
+                    string eventKey = CreateEventKey(next);
+                    string pendingKey = CreatePendingKey(next);
+
+                    // Remove the alert from the pending collection.
+                    _pendingAlertKeys.Remove(pendingKey);
+
+                    // Prevent the same event from being processed twice.
+                    if (!_processedAlertKeys.Add(eventKey))
+                    {
+                        continue;
+                    }
+
+                    alert = next;
+                    return true;
                 }
 
-                string eventKey = CreateEventKey(next);
-                string pendingKey = CreatePendingKey(next);
-
-                _pendingAlertKeys.Remove(pendingKey);
-
-                // Record this event as processed before returning it.
-                if (!_processedAlertKeys.Add(eventKey))
-                {
-                    continue;
-                }
-
-                alert = next;
-                return true;
+                alert = null;
+                return false;
             }
-
-            alert = null;
-            return false;
         }
 
         public TelemetryAlert? PeekNextAlert()
         {
-            return _alerts.TryPeek(out TelemetryAlert? alert, out _)
-                ? alert
-                : null;
+            lock (_lock)
+            {
+                return _alerts.TryPeek(
+                    out TelemetryAlert? alert,
+                    out _)
+                    ? alert
+                    : null;
+            }
         }
 
         public TelemetryAlert[] GetPendingAlertsInPriorityOrder()
         {
-            // Sort a copy so the original queue remains unchanged.
-            var copy = new PriorityQueue<TelemetryAlert, int>();
-
-            foreach (var item in _alerts.UnorderedItems)
+            lock (_lock)
             {
-                copy.Enqueue(item.Element, item.Priority);
-            }
+                // Create a temporary queue so the original is not changed.
+                var copy = new PriorityQueue<TelemetryAlert, int>();
 
-            var pendingAlerts = new List<TelemetryAlert>();
-
-            while (copy.TryDequeue(out var alert, out _))
-            {
-                if (alert != null)
+                foreach (var item in _alerts.UnorderedItems)
                 {
-                    pendingAlerts.Add(alert);
+                    copy.Enqueue(item.Element, item.Priority);
                 }
-            }
 
-            return pendingAlerts.ToArray();
+                var pendingAlerts = new List<TelemetryAlert>();
+
+                // Remove items from the temporary queue in priority order.
+                while (copy.TryDequeue(out var alert, out _))
+                {
+                    if (alert != null)
+                    {
+                        pendingAlerts.Add(alert);
+                    }
+                }
+
+                return pendingAlerts.ToArray();
+            }
         }
 
         private static string CreatePendingKey(TelemetryAlert alert)
         {
             string device = alert.DeviceIdentifier.Trim().ToUpperInvariant();
             string severity = alert.Severity.Trim().ToUpperInvariant();
+
             string value = alert.Value.ToString(
                 "R",
                 CultureInfo.InvariantCulture);
@@ -116,7 +159,7 @@ namespace SmartX.Api.Services
 
         private static string CreateEventKey(TelemetryAlert alert)
         {
-            // The timestamp distinguishes separate occurrences of an alert.
+            // The timestamp distinguishes separate alert occurrences.
             return $"{CreatePendingKey(alert)}|{alert.Timestamp.ToUniversalTime().Ticks}";
         }
 
