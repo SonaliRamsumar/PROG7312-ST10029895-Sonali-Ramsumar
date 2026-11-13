@@ -5,7 +5,7 @@ namespace SmartX.Api.Models
     {
         public int Id { get; set; }
 
-        // Identifies whether the activity was a search, command, or undo.
+        // Identifies whether the activity was a search, command or undo.
         public string ActivityType { get; set; } = string.Empty;
 
         // The device identifier or search query associated with the activity.
@@ -17,10 +17,14 @@ namespace SmartX.Api.Models
         // The command value, such as On or Off.
         public string Value { get; set; } = string.Empty;
 
-        // Search filters help the engine recognise repeated searches.
+        // Search filters help the engine recognise repeated triggers.
         public string Category { get; set; } = string.Empty;
 
         public string StateFilter { get; set; } = string.Empty;
+
+        // Links a command to the search occasion that triggered it.
+        // This remains null when no suitable search was recorded.
+        public int? TriggerActivityId { get; set; }
 
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
