@@ -1,6 +1,8 @@
 ﻿
+using Microsoft.AspNetCore.Hosting;
 using SmartX.Api.DataStructures;
 using SmartX.Api.Models;
+using System.Text.Json;
 
 namespace SmartX.Api.Services
 {
@@ -15,7 +17,24 @@ namespace SmartX.Api.Services
                 new(StringComparer.OrdinalIgnoreCase);
 
         private readonly object _lock = new();
+        private readonly string _storageFilePath;
         private long _nextSequence;
+
+        private readonly JsonSerializerOptions _jsonOptions = new()
+        {
+            WriteIndented = true,
+            PropertyNameCaseInsensitive = true
+        };
+
+        public TelemetryHistoryService(IWebHostEnvironment environment)
+        {
+            _storageFilePath = Path.Combine(
+                environment.ContentRootPath,
+                "App_Data",
+                "telemetry-history.json");
+
+            LoadHistory();
+        }
 
         public int Count
         {
@@ -38,29 +57,103 @@ namespace SmartX.Api.Services
 
             lock (_lock)
             {
-                string deviceIdentifier = packet.DeviceIdentifier.Trim();
-
-                if (!_deviceHistory.TryGetValue(
-                    deviceIdentifier, out var tree))
-                {
-                    tree = new AvlTree<
-                        (DateTime Timestamp, long Sequence),
-                        HistoricalEntry>();
-
-                    _deviceHistory.Add(deviceIdentifier, tree);
-                }
-
-                long sequence = ++_nextSequence;
-
-                var entry = new HistoricalEntry(sequence, packet);
-
-                tree.Insert(
-                    (packet.Timestamp, sequence),
-                    entry);
+                InsertReading(packet);
+                SaveHistory();
             }
         }
 
-        // Returns all readings in chronological order.
+        private void InsertReading(TelemetryPacket<double> packet)
+        {
+            string deviceIdentifier = packet.DeviceIdentifier.Trim();
+
+            if (!_deviceHistory.TryGetValue(
+                deviceIdentifier, out var tree))
+            {
+                tree = new AvlTree<
+                    (DateTime Timestamp, long Sequence),
+                    HistoricalEntry>();
+
+                _deviceHistory.Add(deviceIdentifier, tree);
+            }
+
+            long sequence = ++_nextSequence;
+
+            var entry = new HistoricalEntry(sequence, packet);
+
+            tree.Insert(
+                (packet.Timestamp, sequence),
+                entry);
+        }
+
+        private void LoadHistory()
+        {
+            if (!File.Exists(_storageFilePath))
+            {
+                return;
+            }
+
+            string json = File.ReadAllText(_storageFilePath);
+
+            var packets =
+                JsonSerializer.Deserialize<List<TelemetryPacket<double>>>(
+                    json,
+                    _jsonOptions);
+
+            if (packets == null)
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                foreach (var packet in packets)
+                {
+                    if (packet != null &&
+                        !string.IsNullOrWhiteSpace(packet.DeviceIdentifier))
+                    {
+                        InsertReading(packet);
+                    }
+                }
+            }
+        }
+
+        private void SaveHistory()
+        {
+            var packets = _deviceHistory.Values
+                .SelectMany(tree => tree.GetInOrder())
+                .OrderBy(entry => entry.Packet.Timestamp)
+                .ThenBy(entry => entry.Sequence)
+                .Select(entry => entry.Packet)
+                .ToList();
+
+            string directory = Path.GetDirectoryName(_storageFilePath)!;
+
+            Directory.CreateDirectory(directory);
+
+            string temporaryFilePath = _storageFilePath + ".tmp";
+
+            try
+            {
+                string json = JsonSerializer.Serialize(
+                    packets,
+                    _jsonOptions);
+
+                File.WriteAllText(temporaryFilePath, json);
+
+                File.Move(
+                    temporaryFilePath,
+                    _storageFilePath,
+                    overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryFilePath))
+                {
+                    File.Delete(temporaryFilePath);
+                }
+            }
+        }
+
         public List<TelemetryPacket<double>> GetReadingsInChronologicalOrder(
             string? deviceIdentifier = null,
             DateTime? from = null,
@@ -113,7 +206,6 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Returns readings for one device.
         public List<TelemetryPacket<double>> GetReadingsForDevice(
             string deviceIdentifier)
         {
@@ -125,7 +217,6 @@ namespace SmartX.Api.Services
             return GetReadingsInChronologicalOrder(deviceIdentifier);
         }
 
-        // Returns readings within an inclusive date range.
         public List<TelemetryPacket<double>> GetReadingsInRange(
             DateTime start,
             DateTime end,
@@ -142,7 +233,6 @@ namespace SmartX.Api.Services
                 end);
         }
 
-        // Returns the height of one device's AVL tree.
         public int GetTreeHeight(string deviceIdentifier)
         {
             lock (_lock)
@@ -158,7 +248,6 @@ namespace SmartX.Api.Services
             }
         }
 
-        // Converts historical batches into a standard list.
         public List<double> ConvertHistoricalBatchesToList(
             double[][] batches)
         {

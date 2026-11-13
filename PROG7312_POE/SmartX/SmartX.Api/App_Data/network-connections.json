@@ -1,0 +1,17 @@
+[
+  {
+    "From": "T1",
+    "To": "T2",
+    "Weight": 1
+  },
+  {
+    "From": "T1",
+    "To": "T4",
+    "Weight": 2
+  },
+  {
+    "From": "T2",
+    "To": "T3",
+    "Weight": 5
+  }
+]

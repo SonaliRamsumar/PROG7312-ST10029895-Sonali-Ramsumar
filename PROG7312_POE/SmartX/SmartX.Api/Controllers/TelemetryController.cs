@@ -13,7 +13,6 @@ namespace SmartX.Api.Controllers
         private readonly TelemetryHistoryService _historyService;
         private readonly TelemetryQueue<double> _temperatureQueue;
         private readonly AlertPriorityQueue _alertQueue;
-        private readonly LiveTelemetryService _liveTelemetryService;
 
         public TelemetryController(
             TelemetryService telemetryService,
@@ -26,7 +25,6 @@ namespace SmartX.Api.Controllers
             _historyService = historyService;
             _temperatureQueue = temperatureQueue;
             _alertQueue = alertQueue;
-            _liveTelemetryService = liveTelemetryService;
         }
 
         [HttpPost("temperature")]
@@ -34,24 +32,16 @@ namespace SmartX.Api.Controllers
             string deviceIdentifier,
             double value)
         {
-            // Create a timestamped packet for the incoming reading.
             var packet = _telemetryService.CreatePacket(
                 deviceIdentifier,
                 value);
 
-            // Store the complete packet in historical storage.
-            // This preserves the device identifier and timestamp.
             _historyService.AddReading(packet);
 
-            // Add the packet to the FIFO queue for processing.
             _temperatureQueue.Enqueue(packet);
-
-            // Retain the packet for the live dashboard.
-            _liveTelemetryService.AddReading(packet);
 
             string severity = GetTemperatureSeverity(packet.Value);
 
-            // Only warning and critical readings create alerts.
             if (severity != "Normal")
             {
                 var alert = new TelemetryAlert
@@ -71,11 +61,12 @@ namespace SmartX.Api.Controllers
             return Ok(packet);
         }
 
-        // Supplies recent packets, including their source device identifiers.
+        // Returns historical readings to the dashboard.
         [HttpGet("live/readings")]
         public IActionResult GetLiveReadings()
         {
-            return Ok(_liveTelemetryService.GetRecentReadings());
+            return Ok(
+                _historyService.GetReadingsInChronologicalOrder());
         }
 
         [HttpPost("switch")]
@@ -112,21 +103,18 @@ namespace SmartX.Api.Controllers
         [HttpPost("history")]
         public ActionResult<List<double>> ProcessHistory(double[][] batches)
         {
-            // Convert historical batches into one list for processing.
             var readings = _historyService
                 .ConvertHistoricalBatchesToList(batches);
 
             return Ok(readings);
         }
 
-        // Returns all stored readings in chronological order.
         [HttpGet("history/readings")]
         public IActionResult GetStoredReadings()
         {
             return Ok(_historyService.GetReadingsInChronologicalOrder());
         }
 
-        // Returns historical readings for one specific device.
         [HttpGet("history/readings/{deviceIdentifier}")]
         public IActionResult GetDeviceReadings(string deviceIdentifier)
         {
@@ -136,8 +124,6 @@ namespace SmartX.Api.Controllers
             return Ok(readings);
         }
 
-        // Returns readings within a date range.
-        // A device identifier can optionally be supplied as a filter.
         [HttpGet("history/range")]
         public IActionResult GetReadingsInRange(
             [FromQuery] DateTime start,
@@ -165,14 +151,12 @@ namespace SmartX.Api.Controllers
         [HttpGet("queue/pending")]
         public IActionResult GetPendingReadings()
         {
-            // Show queued readings without removing them.
             return Ok(_temperatureQueue.GetPendingPackets());
         }
 
         [HttpPost("queue/process-next")]
         public IActionResult ProcessNextReading()
         {
-            // Remove the oldest waiting reading first.
             if (!_temperatureQueue.TryDequeue(out var packet)
                 || packet == null)
             {
@@ -188,14 +172,12 @@ namespace SmartX.Api.Controllers
         [HttpGet("alerts/pending")]
         public IActionResult GetPendingAlerts()
         {
-            // Return alerts with the most urgent ones first.
             return Ok(_alertQueue.GetPendingAlertsInPriorityOrder());
         }
 
         [HttpPost("alerts/process-next")]
         public IActionResult ProcessNextAlert()
         {
-            // Remove the most urgent alert from the priority queue.
             if (!_alertQueue.TryDequeueAlert(out var alert)
                 || alert == null)
             {
